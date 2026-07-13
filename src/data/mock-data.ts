@@ -45,7 +45,7 @@ export const demoAccounts: UserAccount[] = [
     username: 'admin',
     password: 'admin',
     role: 'admin',
-    name: 'Tendai Moyo',
+    name: 'Dancel Mautsa',
     phone: '+263 77 100 2001',
   },
   {
@@ -54,7 +54,7 @@ export const demoAccounts: UserAccount[] = [
     username: 'staff',
     password: 'staff',
     role: 'staff',
-    name: 'Chipo Ncube',
+    name: 'Ngoni Mautsa',
     phone: '+263 77 100 2002',
   },
   {
@@ -63,7 +63,7 @@ export const demoAccounts: UserAccount[] = [
     username: 'parent',
     password: 'parent',
     role: 'parent',
-    name: 'Rudo Mutasa',
+    name: 'Dancel Mautsa',
     phone: '+263 77 100 2003',
   },
   {
@@ -72,7 +72,7 @@ export const demoAccounts: UserAccount[] = [
     username: 'student',
     password: 'student',
     role: 'student',
-    name: 'Kelvin Mutasa',
+    name: 'Kelvin Mautsa',
     phone: '+263 77 100 2004',
   },
 ]
@@ -234,7 +234,7 @@ export const staff: StaffMember[] = [
 ]
 
 const firstNames = [
-  'Kelvin', 'Tariro', 'Blessing', 'Nyasha', 'Tafadzwa', 'Rutendo', 'Panashe', 'Anesu',
+  'Kelvin', 'Ngonidzashe', 'Blessing', 'Nyasha', 'Tafadzwa', 'Rutendo', 'Panashe', 'Anesu',
   'Tatenda', 'Chiedza', 'Munashe', 'Ruvimbo', 'Takudzwa', 'Vimbai', 'Kudzai', 'Tendai',
   'Sharon', 'Farai', 'Lisa', 'David', 'Grace', 'Ethan', 'Olivia', 'Noah', 'Aisha', 'Brian',
   'Michelle', 'Sean', 'Thandi', 'Craig', 'Precious', 'Junior', 'Faith', 'Ryan', 'Angela',

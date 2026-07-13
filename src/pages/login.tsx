@@ -139,7 +139,7 @@ export function LoginPage() {
             </form>
 
             <div className="mt-5 rounded-md border border-dashed border-navy-200 bg-navy-50/60 p-3 text-xs text-muted-foreground">
-              <p className="font-semibold text-navy-700 mb-1">Demo accounts</p>
+              <p className="font-semibold text-navy-700 mb-1">Demo accounts avemanje manje</p>
               <p>admin / staff / parent / student — password matches the username</p>
             </div>
           </div>

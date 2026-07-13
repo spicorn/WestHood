@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { RedirectHome, RequireAuth } from '@/components/layout/route-guards'
 import {
@@ -59,7 +59,7 @@ import ParentSettings from '@/pages/parent/settings'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<RedirectHome />} />
@@ -131,6 +131,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Toaster richColors position="top-right" closeButton />
-    </BrowserRouter>
+    </>
   )
 }
