@@ -3,6 +3,9 @@ export type Role = 'admin' | 'staff' | 'parent' | 'student'
 export type StudentStatus = 'active' | 'archived'
 export type StaffStatus = 'active' | 'inactive'
 export type InvoiceStatus = 'paid' | 'partial' | 'outstanding' | 'overdue'
+export type PaymentMethod = 'ecocash' | 'onemoney' | 'bank_transfer' | 'cash'
+export type ReportStatus = 'draft' | 'finalized' | 'published'
+export type PredictionConfidence = 'high' | 'medium' | 'low'
 export type AttendanceStatus = 'present' | 'absent' | 'late'
 export type PeriodClockStatus = 'pending' | 'on_time' | 'late' | 'missed' | 'substituted'
 export type NoticeCategory = 'General' | 'Sports' | 'Exams' | 'Holiday' | 'Urgent'
@@ -16,11 +19,15 @@ export type ActivityType =
   | 'reading'
   | 'homework'
   | 'observation'
-  | 'nap'
-  | 'food'
   | 'exam'
   | 'merit'
   | 'alert'
+  | 'payment'
+  | 'fee_reminder'
+  | 'discipline'
+  | 'detention'
+  | 'club'
+  | 'guidance'
 
 export interface UserAccount {
   id: string
@@ -45,7 +52,7 @@ export interface ClassRoom {
   id: string
   name: string
   grade: string
-  level: 'early' | 'primary' | 'olevel' | 'alevel'
+  level: 'olevel' | 'alevel'
   color: string
   classTeacherId?: string
   capacity: number
@@ -83,6 +90,22 @@ export interface ParentGuardian {
   }
 }
 
+export type LeadershipRole =
+  | 'none'
+  | 'head_boy'
+  | 'head_girl'
+  | 'deputy_head'
+  | 'prefect'
+  | 'class_captain'
+
+export type DisciplineSeverity = 'minor' | 'major' | 'serious'
+export type ConsequenceStatus = 'scheduled' | 'completed' | 'missed'
+export type ExamBody = 'ZIMSEC' | 'Cambridge'
+export type ExamLevel = 'O-Level' | 'A-Level'
+export type RegistrationStatus = 'registered' | 'pending' | 'not_registered'
+export type ClubCategory = 'sport' | 'academic' | 'creative'
+export type ALevelStream = 'sciences' | 'commercials' | 'arts'
+
 export interface Student {
   id: string
   firstName: string
@@ -97,6 +120,10 @@ export interface Student {
   attendancePct: number
   previousAvg: number
   currentAvg: number
+  leadershipRole?: LeadershipRole
+  /** Set when Form 4 promotes into Lower Sixth */
+  alevelStream?: ALevelStream
+  disciplineEscalated?: boolean
 }
 
 export interface Subject {
@@ -138,6 +165,29 @@ export interface Notice {
   createdBy: string
 }
 
+export interface FeeInstalment {
+  id: string
+  label: string
+  /** 1-based instalment number within the plan */
+  sequence: number
+  amount: number
+  paid: number
+  dueDate: string
+  status: InvoiceStatus
+}
+
+export interface PaymentRecord {
+  id: string
+  invoiceId: string
+  instalmentId?: string
+  amount: number
+  method: PaymentMethod
+  paidAt: string
+  reference: string
+  recordedBy: string
+  mobileNumber?: string
+}
+
 export interface Invoice {
   id: string
   studentId: string
@@ -148,6 +198,10 @@ export interface Invoice {
   status: InvoiceStatus
   dueDate: string
   issuedDate: string
+  /** When set, fees are split across instalments rather than a lump sum */
+  instalmentPlan?: boolean
+  instalments?: FeeInstalment[]
+  classId?: string
 }
 
 export interface FeeStructure {
@@ -156,6 +210,24 @@ export interface FeeStructure {
   term: string
   amount: number
   description: string
+  /** Number of termly instalments (1 = lump sum, 3 = three instalments) */
+  instalmentCount: number
+}
+
+export interface ElectronicReport {
+  id: string
+  studentId: string
+  term: string
+  examId: string
+  status: ReportStatus
+  classPosition: number
+  classSize: number
+  attendancePct: number
+  principalComment?: string
+  classTeacherComment?: string
+  finalizedAt?: string
+  publishedAt?: string
+  createdAt: string
 }
 
 export interface TimetableSlot {
@@ -245,6 +317,68 @@ export interface MeritRecord {
   reason: string
   date: string
   loggedBy: string
+  /** Disciplinary extension — for demerits / conduct follow-up */
+  severity?: DisciplineSeverity
+  category?: string
+  escalated?: boolean
+  notes?: string
+}
+
+export interface DetentionRecord {
+  id: string
+  studentId: string
+  meritId: string
+  scheduledAt: string
+  location: string
+  status: ConsequenceStatus
+  assignedBy: string
+  notes?: string
+}
+
+export interface GuidanceNote {
+  id: string
+  studentId: string
+  careerInterest: string
+  tags: string[]
+  pathwayNotes: string
+  loggedBy: string
+  loggedByName: string
+  createdAt: string
+}
+
+export interface ExamSitting {
+  id: string
+  name: string
+  body: ExamBody
+  level: ExamLevel
+  series: string
+  year: number
+}
+
+export interface ExamRegistration {
+  id: string
+  sittingId: string
+  studentId: string
+  subjectIds: string[]
+  candidateNumber: string
+  status: RegistrationStatus
+}
+
+export interface Club {
+  id: string
+  name: string
+  category: ClubCategory
+  supervisorId: string
+  meetingDay: string
+  meetingTime: string
+  description: string
+}
+
+export interface ClubMembership {
+  id: string
+  clubId: string
+  studentId: string
+  joinedAt: string
 }
 
 export interface PickupPerson {

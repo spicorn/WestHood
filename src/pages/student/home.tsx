@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { BookOpenCheck, CalendarClock, ClipboardList, GraduationCap } from 'lucide-react'
+import { BookOpenCheck, CalendarClock, ClipboardList, GraduationCap, Users } from 'lucide-react'
 import { useAppStore } from '@/stores/app-store'
 import { useCurrentStudent } from '@/hooks/use-current-student'
 import { DEMO_TODAY, exams } from '@/data/mock-data'
@@ -19,6 +19,8 @@ export default function StudentHomePage() {
   const timetable = useAppStore((s) => s.timetable)
   const notices = useAppStore((s) => s.notices)
   const homework = useAppStore((s) => s.homework)
+  const clubs = useAppStore((s) => s.clubs)
+  const clubMemberships = useAppStore((s) => s.clubMemberships)
 
   const classRoom = classes.find((c) => c.id === student.classId)
 
@@ -59,6 +61,25 @@ export default function StudentHomePage() {
     [notices, student.classId],
   )
 
+  const myClubs = useMemo(() => {
+    return clubMemberships
+      .filter((m) => m.studentId === student.id)
+      .map((m) => clubs.find((c) => c.id === m.clubId))
+      .filter(Boolean)
+  }, [clubMemberships, clubs, student.id])
+
+  const nextFixture = useMemo(() => {
+    const names = myClubs.map((c) => c!.name.toLowerCase())
+    return notices
+      .filter((n) => n.date >= DEMO_TODAY)
+      .filter(
+        (n) =>
+          n.category === 'Sports' ||
+          names.some((name) => n.title.toLowerCase().includes(name.split(' ')[0] ?? '')),
+      )
+      .sort((a, b) => a.date.localeCompare(b.date))[0]
+  }, [notices, myClubs])
+
   return (
     <div>
       <PageHeader
@@ -73,10 +94,49 @@ export default function StudentHomePage() {
         <StatCard label="Pending homework" value={pendingHomework.length} icon={BookOpenCheck} accent="bg-sky-50 text-sky-700" hint="Assigned or missing" />
       </div>
 
+      <div className="mb-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-4 w-4" /> My Clubs
+            </CardTitle>
+            <Link to="/student/clubs" className="text-sm font-medium text-navy-700 hover:underline">
+              Manage →
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {myClubs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                You haven&apos;t joined any clubs yet.{' '}
+                <Link to="/student/clubs" className="font-medium text-navy-700 hover:underline">
+                  Browse clubs
+                </Link>
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {myClubs.map((c) =>
+                  c ? (
+                    <Badge key={c.id} variant="outline">
+                      {c.name}
+                    </Badge>
+                  ) : null,
+                )}
+              </div>
+            )}
+            {nextFixture && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Next fixture: <span className="font-medium text-navy-800">{nextFixture.title}</span> ·{' '}
+                {formatDate(nextFixture.date)}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Today's timetable — {DAY_LABELS[todayIndex] ?? 'Weekend'}</CardTitle>
+            <CardTitle>Today&apos;s timetable — {DAY_LABELS[todayIndex] ?? 'Weekend'}</CardTitle>
           </CardHeader>
           <CardContent>
             {todaysSlots.length === 0 ? (
