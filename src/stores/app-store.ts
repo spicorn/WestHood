@@ -2,16 +2,30 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
   ActivityEntry,
+  ALevelStream,
   ClassRoom,
+  Club,
+  ClubMembership,
+  ConsequenceStatus,
+  DetentionRecord,
+  ElectronicReport,
+  ExamRegistration,
+  ExamSitting,
+  FeeStructure,
   GradeEntry,
+  GuidanceNote,
   Homework,
   Invoice,
+  LeadershipRole,
   LibraryBook,
   MeritRecord,
   Notice,
   NotificationItem,
   ParentInvite,
+  PaymentMethod,
+  PaymentRecord,
   PickupPerson,
+  ReportStatus,
   SchoolSettings,
   StaffMember,
   StaffPeriodAttendance,
@@ -24,7 +38,15 @@ import type {
 import {
   activities as seedActivities,
   classes as seedClasses,
+  clubMemberships as seedClubMemberships,
+  clubs as seedClubs,
+  detentionRecords as seedDetentions,
+  electronicReports as seedReports,
+  examRegistrations as seedExamRegs,
+  examSittings as seedExamSittings,
+  feeStructures as seedFeeStructures,
   grades as seedGrades,
+  guidanceNotes as seedGuidance,
   homework as seedHomework,
   invoices as seedInvoices,
   libraryBooks as seedLibrary,
@@ -32,6 +54,7 @@ import {
   notices as seedNotices,
   notifications as seedNotifications,
   parentInvites as seedInvites,
+  paymentRecords as seedPayments,
   pickupPeople as seedPickup,
   schoolSettings as seedSettings,
   staff as seedStaff,
@@ -42,6 +65,7 @@ import {
   subjects as seedSubjects,
   timetable as seedTimetable,
 } from '@/data/mock-data'
+import { applyPaymentToInvoice, makeReceiptRef, syncInvoiceTotals } from '@/lib/fees'
 
 interface AppState {
   students: Student[]
@@ -50,6 +74,15 @@ interface AppState {
   subjects: Subject[]
   notices: Notice[]
   invoices: Invoice[]
+  feeStructures: FeeStructure[]
+  paymentRecords: PaymentRecord[]
+  electronicReports: ElectronicReport[]
+  detentionRecords: DetentionRecord[]
+  guidanceNotes: GuidanceNote[]
+  examSittings: ExamSitting[]
+  examRegistrations: ExamRegistration[]
+  clubs: Club[]
+  clubMemberships: ClubMembership[]
   grades: GradeEntry[]
   timetable: TimetableSlot[]
   staffAttendance: StaffPeriodAttendance[]
@@ -73,6 +106,16 @@ interface AppState {
   upsertNotice: (n: Notice) => void
   deleteNotice: (id: string) => void
   updateInvoice: (id: string, patch: Partial<Invoice>) => void
+  upsertFeeStructure: (f: FeeStructure) => void
+  recordPayment: (input: {
+    invoiceId: string
+    amount: number
+    method: PaymentMethod
+    instalmentId?: string
+    recordedBy: string
+    mobileNumber?: string
+  }) => PaymentRecord | null
+  sendFeeReminders: (invoiceIds: string[], by: string) => number
   upsertGrade: (g: GradeEntry) => void
   upsertTimetableSlot: (slot: TimetableSlot) => void
   updateStaffAttendance: (id: string, patch: Partial<StaffPeriodAttendance>) => void
@@ -88,8 +131,22 @@ interface AppState {
   removePickup: (id: string) => void
   markNotificationsRead: (role: string) => void
   updateSettings: (s: Partial<SchoolSettings>) => void
-  promoteClass: (fromClassId: string, toClassId: string, excludeIds: string[]) => void
+  promoteClass: (fromClassId: string, toClassId: string, excludeIds: string[], streamByStudent?: Record<string, ALevelStream>) => void
   requestLibraryBook: (bookId: string, studentId: string) => void
+  upsertReport: (r: ElectronicReport) => void
+  setReportStatus: (id: string, status: ReportStatus) => void
+  bulkFinalizeReports: (studentIds: string[], term: string) => number
+  setPrincipalComment: (reportId: string, comment: string) => void
+  addMeritWithEscalation: (m: MeritRecord) => { escalated: boolean }
+  upsertDetention: (d: DetentionRecord) => void
+  updateDetentionStatus: (id: string, status: ConsequenceStatus) => void
+  addGuidanceNote: (n: GuidanceNote) => void
+  upsertExamRegistration: (r: ExamRegistration) => void
+  bulkRegisterClass: (sittingId: string, classId: string, subjectIds: string[]) => number
+  upsertClub: (c: Club) => void
+  joinClub: (clubId: string, studentId: string) => void
+  leaveClub: (clubId: string, studentId: string) => void
+  setLeadershipRole: (studentId: string, role: LeadershipRole) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -101,6 +158,15 @@ export const useAppStore = create<AppState>()(
       subjects: seedSubjects,
       notices: seedNotices,
       invoices: seedInvoices,
+      feeStructures: seedFeeStructures,
+      paymentRecords: seedPayments,
+      electronicReports: seedReports,
+      detentionRecords: seedDetentions,
+      guidanceNotes: seedGuidance,
+      examSittings: seedExamSittings,
+      examRegistrations: seedExamRegs,
+      clubs: seedClubs,
+      clubMemberships: seedClubMemberships,
       grades: seedGrades,
       timetable: seedTimetable,
       staffAttendance: seedStaffAtt,
@@ -153,8 +219,68 @@ export const useAppStore = create<AppState>()(
       deleteNotice: (id) => set((st) => ({ notices: st.notices.filter((n) => n.id !== id) })),
       updateInvoice: (id, patch) =>
         set((st) => ({
-          invoices: st.invoices.map((inv) => (inv.id === id ? { ...inv, ...patch } : inv)),
+          invoices: st.invoices.map((inv) =>
+            inv.id === id ? syncInvoiceTotals({ ...inv, ...patch }) : inv,
+          ),
         })),
+      upsertFeeStructure: (f) =>
+        set((st) => ({
+          feeStructures: st.feeStructures.some((x) => x.id === f.id)
+            ? st.feeStructures.map((x) => (x.id === f.id ? f : x))
+            : [...st.feeStructures, f],
+        })),
+      recordPayment: ({ invoiceId, amount, method, instalmentId, recordedBy, mobileNumber }) => {
+        const invoice = get().invoices.find((i) => i.id === invoiceId)
+        if (!invoice || amount <= 0) return null
+        const updated = applyPaymentToInvoice(invoice, amount, instalmentId)
+        const record: PaymentRecord = {
+          id: `pay-${Date.now()}`,
+          invoiceId,
+          instalmentId,
+          amount,
+          method,
+          paidAt: new Date().toISOString(),
+          reference: makeReceiptRef(method),
+          recordedBy,
+          mobileNumber,
+        }
+        const student = get().students.find((s) => s.id === invoice.studentId)
+        set((st) => ({
+          invoices: st.invoices.map((i) => (i.id === invoiceId ? updated : i)),
+          paymentRecords: [record, ...st.paymentRecords],
+          activities: [
+            {
+              id: `act-pay-${Date.now()}`,
+              studentId: invoice.studentId,
+              type: 'payment',
+              title: `Fee payment received`,
+              description: `${method} payment of $${amount.toFixed(2)} for ${student ? `${student.firstName} ${student.lastName}` : 'student'} — ref ${record.reference}`,
+              status: 'Paid',
+              date: new Date().toISOString().slice(0, 10),
+              time: new Date().toTimeString().slice(0, 5),
+            },
+            ...st.activities,
+          ],
+        }))
+        return record
+      },
+      sendFeeReminders: (invoiceIds, by) => {
+        const invoices = get().invoices.filter((i) => invoiceIds.includes(i.id))
+        const now = new Date()
+        const activities: ActivityEntry[] = invoices.map((inv) => ({
+          id: `act-rem-${inv.id}-${now.getTime()}`,
+          studentId: inv.studentId,
+          type: 'fee_reminder',
+          title: 'Fee reminder sent',
+          description: `Reminder for outstanding balance on ${inv.description} (sent by ${by})`,
+          status: 'Sent',
+          date: now.toISOString().slice(0, 10),
+          time: now.toTimeString().slice(0, 5),
+          flagged: true,
+        }))
+        set((st) => ({ activities: [...activities, ...st.activities] }))
+        return activities.length
+      },
       upsertGrade: (g) =>
         set((st) => ({
           grades: st.grades.some((x) => x.id === g.id)
@@ -193,7 +319,14 @@ export const useAppStore = create<AppState>()(
                   ...h,
                   submissions: h.submissions.map((s) =>
                     s.studentId === studentId
-                      ? { ...s, status, submittedAt: status === 'submitted' || status === 'late' ? new Date().toISOString() : s.submittedAt }
+                      ? {
+                          ...s,
+                          status,
+                          submittedAt:
+                            status === 'submitted' || status === 'late'
+                              ? new Date().toISOString()
+                              : s.submittedAt,
+                        }
                       : s,
                   ),
                 },
@@ -218,6 +351,189 @@ export const useAppStore = create<AppState>()(
         })),
       addStudyMaterial: (m) => set((st) => ({ studyMaterials: [m, ...st.studyMaterials] })),
       addMerit: (m) => set((st) => ({ meritRecords: [m, ...st.meritRecords] })),
+      addMeritWithEscalation: (m) => {
+        const termStart = '2026-05-05'
+        let escalated = false
+        set((st) => {
+          const next = [m, ...st.meritRecords]
+          if (m.type === 'demerit' && m.severity === 'minor') {
+            const minors = next.filter(
+              (x) =>
+                x.studentId === m.studentId &&
+                x.type === 'demerit' &&
+                x.severity === 'minor' &&
+                x.date >= termStart,
+            )
+            if (minors.length >= 3) {
+              escalated = true
+              const marked = next.map((x) =>
+                x.id === m.id || (x.studentId === m.studentId && x.severity === 'minor' && x.date >= termStart)
+                  ? { ...x, escalated: true }
+                  : x,
+              )
+              return {
+                meritRecords: marked,
+                students: st.students.map((s) =>
+                  s.id === m.studentId ? { ...s, disciplineEscalated: true } : s,
+                ),
+                notifications: [
+                  {
+                    id: `nt-esc-${Date.now()}`,
+                    role: 'admin' as const,
+                    title: 'Discipline escalation',
+                    body: `Student flagged for follow-up after ${minors.length} Minor entries this term.`,
+                    time: 'Just now',
+                    read: false,
+                    href: `/admin/students/${m.studentId}`,
+                  },
+                  ...st.notifications,
+                ],
+                activities: [
+                  {
+                    id: `act-esc-${Date.now()}`,
+                    studentId: m.studentId,
+                    type: 'discipline' as const,
+                    title: 'Flagged for follow-up',
+                    description: `${minors.length} Minor entries this term — escalated to Head of Year`,
+                    status: 'Escalated',
+                    date: new Date().toISOString().slice(0, 10),
+                    time: new Date().toTimeString().slice(0, 5),
+                    flagged: true,
+                  },
+                  ...st.activities,
+                ],
+              }
+            }
+          }
+          if (m.type === 'demerit' && (m.severity === 'major' || m.severity === 'serious')) {
+            escalated = m.severity === 'serious'
+            return {
+              meritRecords: [{ ...m, escalated: escalated || m.escalated }, ...st.meritRecords],
+              students: escalated
+                ? st.students.map((s) => (s.id === m.studentId ? { ...s, disciplineEscalated: true } : s))
+                : st.students,
+            }
+          }
+          return { meritRecords: next }
+        })
+        return { escalated }
+      },
+      upsertDetention: (d) =>
+        set((st) => ({
+          detentionRecords: st.detentionRecords.some((x) => x.id === d.id)
+            ? st.detentionRecords.map((x) => (x.id === d.id ? d : x))
+            : [d, ...st.detentionRecords],
+          activities: [
+            {
+              id: `act-det-${Date.now()}`,
+              studentId: d.studentId,
+              type: 'detention' as const,
+              title: 'Detention scheduled',
+              description: `${d.scheduledAt.slice(0, 16).replace('T', ' ')} — ${d.location}`,
+              status: d.status === 'scheduled' ? 'Scheduled' : d.status,
+              date: new Date().toISOString().slice(0, 10),
+              time: new Date().toTimeString().slice(0, 5),
+              flagged: true,
+            },
+            ...st.activities,
+          ],
+        })),
+      updateDetentionStatus: (id, status) =>
+        set((st) => ({
+          detentionRecords: st.detentionRecords.map((d) => (d.id === id ? { ...d, status } : d)),
+        })),
+      addGuidanceNote: (n) =>
+        set((st) => ({
+          guidanceNotes: [n, ...st.guidanceNotes],
+          activities: [
+            {
+              id: `act-guid-${Date.now()}`,
+              studentId: n.studentId,
+              type: 'guidance' as const,
+              title: 'Career guidance note',
+              description: `Interest: ${n.careerInterest}`,
+              status: 'Logged',
+              date: n.createdAt.slice(0, 10),
+              time: n.createdAt.slice(11, 16) || '12:00',
+            },
+            ...st.activities,
+          ],
+        })),
+      upsertExamRegistration: (r) =>
+        set((st) => ({
+          examRegistrations: st.examRegistrations.some((x) => x.id === r.id)
+            ? st.examRegistrations.map((x) => (x.id === r.id ? r : x))
+            : [...st.examRegistrations, r],
+        })),
+      bulkRegisterClass: (sittingId, classId, subjectIds) => {
+        const classStudents = get().students.filter((s) => s.classId === classId && s.status === 'active')
+        let count = 0
+        set((st) => {
+          const next = [...st.examRegistrations]
+          classStudents.forEach((s, i) => {
+            const existing = next.find((r) => r.sittingId === sittingId && r.studentId === s.id)
+            if (existing) {
+              Object.assign(existing, {
+                subjectIds,
+                status: 'registered' as const,
+                candidateNumber: existing.candidateNumber || `ZW${2026500 + i}`,
+              })
+            } else {
+              next.push({
+                id: `reg-${sittingId}-${s.id}`,
+                sittingId,
+                studentId: s.id,
+                subjectIds,
+                candidateNumber: `ZW${2026500 + i}`,
+                status: 'registered',
+              })
+            }
+            count++
+          })
+          return { examRegistrations: next }
+        })
+        return count
+      },
+      upsertClub: (c) =>
+        set((st) => ({
+          clubs: st.clubs.some((x) => x.id === c.id)
+            ? st.clubs.map((x) => (x.id === c.id ? c : x))
+            : [...st.clubs, c],
+        })),
+      joinClub: (clubId, studentId) =>
+        set((st) => {
+          if (st.clubMemberships.some((m) => m.clubId === clubId && m.studentId === studentId)) return st
+          const club = st.clubs.find((c) => c.id === clubId)
+          return {
+            clubMemberships: [
+              { id: `cm-${Date.now()}`, clubId, studentId, joinedAt: new Date().toISOString().slice(0, 10) },
+              ...st.clubMemberships,
+            ],
+            activities: [
+              {
+                id: `act-club-${Date.now()}`,
+                studentId,
+                type: 'club' as const,
+                title: club?.name ?? 'Club',
+                description: `Signed up for ${club?.name ?? 'club'}`,
+                status: 'Joined',
+                date: new Date().toISOString().slice(0, 10),
+                time: new Date().toTimeString().slice(0, 5),
+              },
+              ...st.activities,
+            ],
+          }
+        }),
+      leaveClub: (clubId, studentId) =>
+        set((st) => ({
+          clubMemberships: st.clubMemberships.filter(
+            (m) => !(m.clubId === clubId && m.studentId === studentId),
+          ),
+        })),
+      setLeadershipRole: (studentId, role) =>
+        set((st) => ({
+          students: st.students.map((s) => (s.id === studentId ? { ...s, leadershipRole: role } : s)),
+        })),
       addActivity: (a) => set((st) => ({ activities: [a, ...st.activities] })),
       upsertInvite: (i) =>
         set((st) => ({
@@ -239,11 +555,15 @@ export const useAppStore = create<AppState>()(
           ),
         })),
       updateSettings: (s) => set((st) => ({ settings: { ...st.settings, ...s } })),
-      promoteClass: (fromClassId, toClassId, excludeIds) =>
+      promoteClass: (fromClassId, toClassId, excludeIds, streamByStudent) =>
         set((st) => ({
           students: st.students.map((s) =>
             s.classId === fromClassId && s.status === 'active' && !excludeIds.includes(s.id)
-              ? { ...s, classId: toClassId }
+              ? {
+                  ...s,
+                  classId: toClassId,
+                  alevelStream: streamByStudent?.[s.id] ?? s.alevelStream,
+                }
               : s,
           ),
         })),
@@ -263,15 +583,57 @@ export const useAppStore = create<AppState>()(
           ),
         }))
       },
+      upsertReport: (r) =>
+        set((st) => ({
+          electronicReports: st.electronicReports.some((x) => x.id === r.id)
+            ? st.electronicReports.map((x) => (x.id === r.id ? r : x))
+            : [r, ...st.electronicReports],
+        })),
+      setReportStatus: (id, status) =>
+        set((st) => ({
+          electronicReports: st.electronicReports.map((r) => {
+            if (r.id !== id) return r
+            return {
+              ...r,
+              status,
+              finalizedAt:
+                status === 'finalized' || status === 'published'
+                  ? r.finalizedAt ?? new Date().toISOString()
+                  : r.finalizedAt,
+              publishedAt: status === 'published' ? new Date().toISOString() : r.publishedAt,
+            }
+          }),
+        })),
+      bulkFinalizeReports: (studentIds, term) => {
+        const now = new Date().toISOString()
+        let count = 0
+        set((st) => ({
+          electronicReports: st.electronicReports.map((r) => {
+            if (r.term !== term || !studentIds.includes(r.studentId) || r.status !== 'draft') return r
+            count++
+            return { ...r, status: 'finalized' as const, finalizedAt: now }
+          }),
+        }))
+        return count
+      },
+      setPrincipalComment: (reportId, comment) =>
+        set((st) => ({
+          electronicReports: st.electronicReports.map((r) =>
+            r.id === reportId ? { ...r, principalComment: comment } : r,
+          ),
+        })),
     }),
     {
-      name: 'westwood-app-data-v2',
+      name: 'westwood-app-data-v4',
       partialize: (s) => ({
         students: s.students,
         staff: s.staff,
         classes: s.classes,
         notices: s.notices,
         invoices: s.invoices,
+        feeStructures: s.feeStructures,
+        paymentRecords: s.paymentRecords,
+        electronicReports: s.electronicReports,
         grades: s.grades,
         timetable: s.timetable,
         staffAttendance: s.staffAttendance,
@@ -286,6 +648,11 @@ export const useAppStore = create<AppState>()(
         studyMaterials: s.studyMaterials,
         libraryBooks: s.libraryBooks,
         notifications: s.notifications,
+        detentionRecords: s.detentionRecords,
+        guidanceNotes: s.guidanceNotes,
+        examRegistrations: s.examRegistrations,
+        clubs: s.clubs,
+        clubMemberships: s.clubMemberships,
       }),
     },
   ),

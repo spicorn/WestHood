@@ -3,8 +3,7 @@ import { Receipt, Wallet } from 'lucide-react'
 import { useAppStore } from '@/stores/app-store'
 import { useCurrentStudent } from '@/hooks/use-current-student'
 import { PageHeader, StatCard, EmptyState } from '@/components/shared/empty-state'
-import { DataTable, type Column } from '@/components/shared/data-table'
-import { Badge } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui/card'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Invoice } from '@/data/types'
 
@@ -24,30 +23,84 @@ export default function StudentPaymentsPage() {
   const totalPaid = myInvoices.reduce((sum, i) => sum + i.paid, 0)
   const balance = totalBilled - totalPaid
 
-  const columns: Column<Invoice>[] = [
-    { key: 'description', header: 'Description', render: (r) => <span className="font-medium">{r.description}</span> },
-    { key: 'term', header: 'Term', render: (r) => r.term },
-    { key: 'amount', header: 'Amount', render: (r) => formatCurrency(r.amount) },
-    { key: 'paid', header: 'Paid', render: (r) => formatCurrency(r.paid) },
-    { key: 'balance', header: 'Balance', render: (r) => formatCurrency(r.amount - r.paid) },
-    { key: 'status', header: 'Status', render: (r) => <Badge variant={statusVariant[r.status]}>{r.status}</Badge> },
-    { key: 'dueDate', header: 'Due Date', render: (r) => formatDate(r.dueDate) },
-  ]
-
   return (
     <div>
-      <PageHeader title="Payments" description="Read-only view of your fee invoices. Contact the accounts office for payment." />
+      <PageHeader
+        title="Payments"
+        description="Your fee account and instalment plan. Parents can pay online — ask them to use Pay Now in the parent portal."
+      />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <StatCard label="Total billed" value={formatCurrency(totalBilled)} icon={Wallet} accent="bg-navy-50 text-navy-700" />
         <StatCard label="Total paid" value={formatCurrency(totalPaid)} icon={Receipt} accent="bg-forest-50 text-forest-700" />
-        <StatCard label="Balance due" value={formatCurrency(balance)} icon={Wallet} accent={balance > 0 ? 'bg-red-50 text-red-700' : 'bg-forest-50 text-forest-700'} />
+        <StatCard
+          label="Balance due"
+          value={formatCurrency(balance)}
+          icon={Wallet}
+          accent={balance > 0 ? 'bg-red-50 text-red-700' : 'bg-forest-50 text-forest-700'}
+        />
       </div>
 
       {myInvoices.length === 0 ? (
         <EmptyState title="No invoices" description="No fee invoices have been issued for you yet." />
       ) : (
-        <DataTable data={myInvoices} columns={columns} emptyMessage="No invoices found." />
+        <div className="space-y-4">
+          {myInvoices.map((inv) => (
+            <Card key={inv.id}>
+              <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0">
+                <div>
+                  <CardTitle className="text-lg">{inv.description}</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {inv.term} · Due {formatDate(inv.dueDate)}
+                    {inv.instalmentPlan ? ' · Instalment plan' : ''}
+                  </p>
+                </div>
+                <Badge variant={statusVariant[inv.status]}>{inv.status}</Badge>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-3 flex flex-wrap gap-4 text-sm">
+                  <span>
+                    Billed <strong>{formatCurrency(inv.amount)}</strong>
+                  </span>
+                  <span>
+                    Paid <strong>{formatCurrency(inv.paid)}</strong>
+                  </span>
+                  <span>
+                    Balance <strong>{formatCurrency(inv.amount - inv.paid)}</strong>
+                  </span>
+                </div>
+                {inv.instalments && inv.instalments.length > 0 && (
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50 text-left">
+                          <th className="px-3 py-2">Instalment</th>
+                          <th className="px-3 py-2">Due</th>
+                          <th className="px-3 py-2">Amount</th>
+                          <th className="px-3 py-2">Paid</th>
+                          <th className="px-3 py-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inv.instalments.map((inst) => (
+                          <tr key={inst.id} className="border-b last:border-0">
+                            <td className="px-3 py-2">{inst.label}</td>
+                            <td className="px-3 py-2">{formatDate(inst.dueDate)}</td>
+                            <td className="px-3 py-2">{formatCurrency(inst.amount)}</td>
+                            <td className="px-3 py-2">{formatCurrency(inst.paid)}</td>
+                            <td className="px-3 py-2">
+                              <Badge variant={statusVariant[inst.status]}>{inst.status}</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   )

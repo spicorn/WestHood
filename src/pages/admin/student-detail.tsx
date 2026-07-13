@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   CalendarCheck,
   CheckCircle2,
+  Compass,
   Mail,
   Minus,
   Pencil,
@@ -19,9 +20,11 @@ import {
   Wallet,
 } from 'lucide-react'
 import { PageHeader, EmptyState } from '@/components/shared/empty-state'
+import { SubjectCombinationAdvisor } from '@/components/shared/subject-combination-advisor'
+import { EscalationBadge, LeadershipBadge } from '@/components/shared/leadership-badge'
 import { Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input, Label } from '@/components/ui/input'
+import { Input, Label, Textarea } from '@/components/ui/input'
 import { Avatar, Select } from '@/components/ui/tabs'
 import {
   Dialog,
@@ -32,8 +35,16 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/stores/app-store'
-import { exams, getGradeLetter, parents as allParents, studentFullName } from '@/data/mock-data'
-import type { Invoice, MeritRecord, ParentInvite } from '@/data/types'
+import { exams, getGradeLetter, LEADERSHIP_LABELS, parents as allParents, studentFullName } from '@/data/mock-data'
+import type {
+  DisciplineSeverity,
+  GuidanceNote,
+  Invoice,
+  LeadershipRole,
+  MeritRecord,
+  ParentInvite,
+} from '@/data/types'
+import { adviseALevelStreams } from '@/lib/alevel-advisor'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 const invoiceStatusVariant: Record<Invoice['status'], 'success' | 'warning' | 'danger' | 'secondary'> = {
@@ -41,6 +52,12 @@ const invoiceStatusVariant: Record<Invoice['status'], 'success' | 'warning' | 'd
   partial: 'warning',
   outstanding: 'secondary',
   overdue: 'danger',
+}
+
+const SEVERITY_VARIANT: Record<DisciplineSeverity, 'warning' | 'danger'> = {
+  minor: 'warning',
+  major: 'danger',
+  serious: 'danger',
 }
 
 const editSchema = z.object({
@@ -75,20 +92,43 @@ export default function AdminStudentDetail() {
   const invoices = useAppStore((s) => s.invoices)
   const grades = useAppStore((s) => s.grades)
   const subjects = useAppStore((s) => s.subjects)
+  const homework = useAppStore((s) => s.homework)
   const studentAttendance = useAppStore((s) => s.studentAttendance)
   const parentInvites = useAppStore((s) => s.parentInvites)
   const meritRecords = useAppStore((s) => s.meritRecords)
+  const guidanceNotes = useAppStore((s) => s.guidanceNotes)
+  const detentionRecords = useAppStore((s) => s.detentionRecords)
   const upsertStudent = useAppStore((s) => s.upsertStudent)
   const upsertInvite = useAppStore((s) => s.upsertInvite)
   const addMerit = useAppStore((s) => s.addMerit)
+  const addMeritWithEscalation = useAppStore((s) => s.addMeritWithEscalation)
+  const addGuidanceNote = useAppStore((s) => s.addGuidanceNote)
+  const setLeadershipRole = useAppStore((s) => s.setLeadershipRole)
+  const upsertDetention = useAppStore((s) => s.upsertDetention)
 
   const [editOpen, setEditOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
-  const [meritForm, setMeritForm] = useState<{ type: MeritRecord['type']; points: number; reason: string }>({
+  const [meritForm, setMeritForm] = useState<{
+    type: MeritRecord['type']
+    points: number
+    reason: string
+    severity: DisciplineSeverity
+  }>({
     type: 'merit',
     points: 1,
     reason: '',
+    severity: 'minor',
   })
+  const [guidanceForm, setGuidanceForm] = useState({
+    careerInterest: '',
+    tags: '',
+    pathwayNotes: '',
+  })
+  const [detentionOpen, setDetentionOpen] = useState(false)
+  const [detentionMerit, setDetentionMerit] = useState<MeritRecord | null>(null)
+  const [scheduledAt, setScheduledAt] = useState('2026-07-16T15:30')
+  const [location, setLocation] = useState('Library Room B')
+  const [detentionNotes, setDetentionNotes] = useState('')
 
   const student = useMemo(() => students.find((s) => s.id === id), [students, id])
 
@@ -96,9 +136,25 @@ export default function AdminStudentDetail() {
   const studentInvoices = useMemo(() => invoices.filter((i) => i.studentId === id), [invoices, id])
   const studentMerit = useMemo(() => meritRecords.filter((m) => m.studentId === id), [meritRecords, id])
   const studentInvites = useMemo(() => parentInvites.filter((i) => i.studentId === id), [parentInvites, id])
+  const studentGuidance = useMemo(
+    () =>
+      guidanceNotes
+        .filter((n) => n.studentId === id)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [guidanceNotes, id],
+  )
   const attendanceRecords = useMemo(
     () => studentAttendance.filter((a) => a.studentId === id).sort((a, b) => a.date.localeCompare(b.date)),
     [studentAttendance, id],
+  )
+  const studentDetentions = useMemo(
+    () => detentionRecords.filter((d) => d.studentId === id).sort((a, b) => b.scheduledAt.localeCompare(a.scheduledAt)),
+    [detentionRecords, id],
+  )
+
+  const streamAdvice = useMemo(
+    () => (student ? adviseALevelStreams(student, grades, subjects, homework) : []),
+    [student, grades, subjects, homework],
   )
 
   const editForm = useForm<EditFormValues>({
@@ -133,6 +189,7 @@ export default function AdminStudentDetail() {
   const guardians = allParents.filter((p) => student.parentIds.includes(p.id))
   const className = classes.find((c) => c.id === student.classId)?.name ?? '—'
   const meritTotal = studentMerit.reduce((sum, m) => sum + m.points, 0)
+  const isForm4 = student.classId === 'c-f4'
 
   const gradesByExam = exams.map((exam) => ({
     exam,
@@ -146,9 +203,9 @@ export default function AdminStudentDetail() {
   })
 
   const onInviteSubmit = inviteForm.handleSubmit((values) => {
-    const id = nextEntityId('inv')
+    const inviteId = nextEntityId('inv')
     upsertInvite({
-      id,
+      id: inviteId,
       studentId: student.id,
       name: values.name,
       email: values.email,
@@ -178,18 +235,92 @@ export default function AdminStudentDetail() {
       toast.error('Please add a reason for this merit/demerit entry.')
       return
     }
-    const id = nextEntityId('mr')
-    addMerit({
-      id,
+    const entryId = nextEntityId('mr')
+    if (meritForm.type === 'demerit') {
+      const { escalated } = addMeritWithEscalation({
+        id: entryId,
+        studentId: student.id,
+        points: -Math.abs(meritForm.points),
+        type: 'demerit',
+        reason: meritForm.reason,
+        date: new Date().toISOString().slice(0, 10),
+        loggedBy: 'u-admin',
+        severity: meritForm.severity,
+      })
+      toast.success(
+        escalated
+          ? 'Demerit logged — student flagged for follow-up.'
+          : 'Discipline log updated.',
+      )
+    } else {
+      addMerit({
+        id: entryId,
+        studentId: student.id,
+        points: Math.abs(meritForm.points),
+        type: 'merit',
+        reason: meritForm.reason,
+        date: new Date().toISOString().slice(0, 10),
+        loggedBy: 'u-admin',
+      })
+      toast.success('Merit log updated.')
+    }
+    setMeritForm({ type: 'merit', points: 1, reason: '', severity: 'minor' })
+  }
+
+  const submitGuidance = () => {
+    if (!guidanceForm.careerInterest.trim() || !guidanceForm.pathwayNotes.trim()) {
+      toast.error('Career interest and pathway notes are required.')
+      return
+    }
+    const note: GuidanceNote = {
+      id: nextEntityId('gn'),
       studentId: student.id,
-      points: meritForm.type === 'demerit' ? -Math.abs(meritForm.points) : Math.abs(meritForm.points),
-      type: meritForm.type,
-      reason: meritForm.reason,
-      date: new Date().toISOString().slice(0, 10),
+      careerInterest: guidanceForm.careerInterest.trim(),
+      tags: guidanceForm.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+      pathwayNotes: guidanceForm.pathwayNotes.trim(),
       loggedBy: 'u-admin',
+      loggedByName: 'Admin',
+      createdAt: new Date().toISOString(),
+    }
+    addGuidanceNote(note)
+    toast.success('Guidance note added.')
+    setGuidanceForm({ careerInterest: '', tags: '', pathwayNotes: '' })
+  }
+
+  const openDetention = (m: MeritRecord) => {
+    setDetentionMerit(m)
+    setScheduledAt('2026-07-16T15:30')
+    setLocation('Library Room B')
+    setDetentionNotes('')
+    setDetentionOpen(true)
+  }
+
+  const assignDetention = () => {
+    if (!detentionMerit) return
+    if (!scheduledAt || !location.trim()) {
+      toast.error('Schedule time and location are required.')
+      return
+    }
+    upsertDetention({
+      id: nextEntityId('det'),
+      studentId: student.id,
+      meritId: detentionMerit.id,
+      scheduledAt: scheduledAt.length === 16 ? `${scheduledAt}:00` : scheduledAt,
+      location: location.trim(),
+      status: 'scheduled',
+      assignedBy: 'u-admin',
+      notes: detentionNotes.trim() || undefined,
     })
-    toast.success('Merit log updated.')
-    setMeritForm({ type: 'merit', points: 1, reason: '' })
+    toast.success('Detention scheduled.')
+    setDetentionOpen(false)
+  }
+
+  const onLeadershipChange = (role: LeadershipRole) => {
+    setLeadershipRole(student.id, role)
+    toast.success(role === 'none' ? 'Leadership role cleared.' : `Role set to ${LEADERSHIP_LABELS[role]}.`)
   }
 
   return (
@@ -213,9 +344,13 @@ export default function AdminStudentDetail() {
           <CardContent className="pt-5">
             <div className="flex items-center gap-4">
               <Avatar name={studentFullName(student)} size="lg" />
-              <div>
+              <div className="space-y-1.5">
                 <p className="font-display text-xl font-semibold">{studentFullName(student)}</p>
-                <Badge variant={student.status === 'active' ? 'success' : 'secondary'}>{student.status}</Badge>
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge variant={student.status === 'active' ? 'success' : 'secondary'}>{student.status}</Badge>
+                  <LeadershipBadge role={student.leadershipRole} />
+                  <EscalationBadge show={student.disciplineEscalated} />
+                </div>
               </div>
             </div>
             <dl className="mt-5 space-y-2.5 text-sm">
@@ -249,6 +384,19 @@ export default function AdminStudentDetail() {
                 <dd className={`font-medium ${meritTotal < 0 ? 'text-red-600' : 'text-forest-700'}`}>{meritTotal}</dd>
               </div>
             </dl>
+            <div className="mt-4 space-y-1.5">
+              <Label>Leadership role</Label>
+              <Select
+                value={student.leadershipRole ?? 'none'}
+                onChange={(e) => onLeadershipChange(e.target.value as LeadershipRole)}
+              >
+                {(Object.keys(LEADERSHIP_LABELS) as LeadershipRole[]).map((role) => (
+                  <option key={role} value={role}>
+                    {role === 'none' ? 'No role' : LEADERSHIP_LABELS[role]}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </CardContent>
         </Card>
 
@@ -280,6 +428,12 @@ export default function AdminStudentDetail() {
             )}
           </CardContent>
         </Card>
+
+        {isForm4 && (
+          <div className="lg:col-span-3">
+            <SubjectCombinationAdvisor advice={streamAdvice} />
+          </div>
+        )}
 
         <Card className="lg:col-span-3">
           <CardHeader>
@@ -420,7 +574,72 @@ export default function AdminStudentDetail() {
         <Card className="lg:col-span-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Award className="h-4 w-4" /> Merit / Demerit Log
+              <Compass className="h-4 w-4" /> Guidance
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3 rounded-md border bg-muted/30 p-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Career interest</Label>
+                  <Input
+                    value={guidanceForm.careerInterest}
+                    onChange={(e) => setGuidanceForm((f) => ({ ...f, careerInterest: e.target.value }))}
+                    placeholder="e.g. Engineering / Applied Sciences"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Tags (comma separated)</Label>
+                  <Input
+                    value={guidanceForm.tags}
+                    onChange={(e) => setGuidanceForm((f) => ({ ...f, tags: e.target.value }))}
+                    placeholder="STEM, Engineering"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Pathway notes</Label>
+                <Textarea
+                  rows={3}
+                  value={guidanceForm.pathwayNotes}
+                  onChange={(e) => setGuidanceForm((f) => ({ ...f, pathwayNotes: e.target.value }))}
+                />
+              </div>
+              <Button onClick={submitGuidance}>
+                <Plus className="h-4 w-4" /> Add guidance note
+              </Button>
+            </div>
+            {studentGuidance.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No guidance notes yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {studentGuidance.map((n) => (
+                  <li key={n.id} className="rounded-md border p-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{n.careerInterest}</p>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(n.createdAt.slice(0, 10))} · {n.loggedByName}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {n.tags.map((t) => (
+                        <Badge key={t} variant="outline">
+                          {t}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-muted-foreground">{n.pathwayNotes}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Award className="h-4 w-4" /> Merit / Discipline Log
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -436,6 +655,22 @@ export default function AdminStudentDetail() {
                   <option value="demerit">Demerit</option>
                 </Select>
               </div>
+              {meritForm.type === 'demerit' && (
+                <div className="space-y-1.5">
+                  <Label>Severity</Label>
+                  <Select
+                    value={meritForm.severity}
+                    onChange={(e) =>
+                      setMeritForm((f) => ({ ...f, severity: e.target.value as DisciplineSeverity }))
+                    }
+                    className="w-32"
+                  >
+                    <option value="minor">Minor</option>
+                    <option value="major">Major</option>
+                    <option value="serious">Serious</option>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>Points</Label>
                 <Input
@@ -465,7 +700,7 @@ export default function AdminStudentDetail() {
             ) : (
               <ul className="space-y-1.5">
                 {studentMerit.map((m) => (
-                  <li key={m.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                  <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
                     <div className="flex items-center gap-2">
                       {m.points >= 0 ? (
                         <Plus className="h-3.5 w-3.5 text-forest-600" />
@@ -473,16 +708,48 @@ export default function AdminStudentDetail() {
                         <Minus className="h-3.5 w-3.5 text-red-600" />
                       )}
                       <span>{m.reason}</span>
+                      {m.severity && (
+                        <Badge variant={SEVERITY_VARIANT[m.severity]} className="capitalize">
+                          {m.severity}
+                        </Badge>
+                      )}
+                      <EscalationBadge show={m.escalated} />
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span className={m.points >= 0 ? 'font-semibold text-forest-700' : 'font-semibold text-red-700'}>
                         {m.points > 0 ? `+${m.points}` : m.points}
                       </span>
                       <span>{formatDate(m.date)}</span>
+                      {m.type === 'demerit' && (
+                        <Button size="sm" variant="outline" onClick={() => openDetention(m)}>
+                          Assign detention
+                        </Button>
+                      )}
                     </div>
                   </li>
                 ))}
               </ul>
+            )}
+
+            {studentDetentions.length > 0 && (
+              <div className="pt-2">
+                <p className="mb-2 text-sm font-semibold text-navy-800">Detentions</p>
+                <ul className="space-y-1.5">
+                  {studentDetentions.map((d) => (
+                    <li key={d.id} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                      <span>
+                        {d.scheduledAt.slice(0, 16).replace('T', ' ')} · {d.location}
+                      </span>
+                      <Badge
+                        variant={d.status === 'completed' ? 'success' : d.status === 'missed' ? 'danger' : 'warning'}
+                        className="capitalize"
+                      >
+                        {d.status}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -587,6 +854,35 @@ export default function AdminStudentDetail() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detentionOpen} onOpenChange={setDetentionOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign detention</DialogTitle>
+            <DialogDescription>Schedule constructive follow-up linked to this demerit entry.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Scheduled at</Label>
+              <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Location</Label>
+              <Input value={location} onChange={(e) => setLocation(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notes</Label>
+              <Textarea rows={3} value={detentionNotes} onChange={(e) => setDetentionNotes(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetentionOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={assignDetention}>Schedule</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

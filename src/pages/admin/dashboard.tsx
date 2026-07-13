@@ -28,12 +28,14 @@ import {
   UserSquare2,
 } from 'lucide-react'
 import { PageHeader, StatCard } from '@/components/shared/empty-state'
+import { EscalationBadge } from '@/components/shared/leadership-badge'
 import { Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/tabs'
 import { useAppStore } from '@/stores/app-store'
-import { DEMO_TODAY, studentFullName } from '@/data/mock-data'
+import { DEMO_TODAY, exams, studentFullName } from '@/data/mock-data'
 import { formatDate } from '@/lib/utils'
+import { predictStudentSubjects } from '@/lib/results-prediction'
 
 function weekdayIndex(dateStr: string) {
   // 0 = Monday .. 4 = Friday, matching TimetableSlot.day convention
@@ -46,6 +48,9 @@ export default function AdminDashboard() {
   const students = useAppStore((s) => s.students)
   const staff = useAppStore((s) => s.staff)
   const classes = useAppStore((s) => s.classes)
+  const subjects = useAppStore((s) => s.subjects)
+  const grades = useAppStore((s) => s.grades)
+  const homework = useAppStore((s) => s.homework)
   const invoices = useAppStore((s) => s.invoices)
   const timetable = useAppStore((s) => s.timetable)
   const staffAttendance = useAppStore((s) => s.staffAttendance)
@@ -138,11 +143,17 @@ export default function AdminDashboard() {
         if (s.previousAvg - s.currentAvg > 10) flags.push(`Grade dropped ${Math.round(s.previousAvg - s.currentAvg)} pts`)
         const overdue = invoices.some((inv) => inv.studentId === s.id && inv.status === 'overdue')
         if (overdue) flags.push('Overdue fees')
+        if (s.disciplineEscalated) flags.push('Flagged for follow-up')
+        // Projected decline from results-prediction (trend-based, same rules as Predictions page)
+        const classSubjects = subjects.filter((sub) => sub.classIds.includes(s.classId)).slice(0, 5)
+        const preds = predictStudentSubjects(s, classSubjects.map((x) => x.id), grades, exams, homework)
+        const declining = preds.filter((p) => p.trend === 'declining')
+        if (declining.length >= 2) flags.push(`Projected decline in ${declining.length} subjects`)
         return { student: s, flags }
       })
-      .filter((r) => r.flags.length >= 2)
+      .filter((r) => r.flags.length >= 2 || r.student.disciplineEscalated)
       .sort((a, b) => b.flags.length - a.flags.length)
-  }, [activeStudents, invoices])
+  }, [activeStudents, invoices, subjects, grades, homework])
 
   return (
     <div>
@@ -293,7 +304,10 @@ export default function AdminDashboard() {
                 >
                   <Avatar name={studentFullName(student)} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-navy-900">{studentFullName(student)}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-navy-900">{studentFullName(student)}</p>
+                      <EscalationBadge show={student.disciplineEscalated} />
+                    </div>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {flags.map((f) => (
                         <Badge key={f} variant="danger">

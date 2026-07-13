@@ -2,14 +2,16 @@ import { useMemo, useState } from 'react'
 import {
   AlertTriangle,
   Award,
+  Bell,
   BookOpenCheck,
+  CalendarClock,
   ClipboardCheck,
   ClipboardList,
+  Compass,
   Eye,
   type LucideIcon,
-  Moon,
+  ShieldAlert,
   Users,
-  UtensilsCrossed,
   Wallet,
 } from 'lucide-react'
 import { useAppStore } from '@/stores/app-store'
@@ -30,9 +32,11 @@ const chips: { key: ChipKey; label: string }[] = [
   { key: 'reading', label: 'Reading' },
   { key: 'homework', label: 'Homework' },
   { key: 'observation', label: 'Observations' },
-  { key: 'nap', label: 'Naps' },
-  { key: 'food', label: 'Food' },
   { key: 'exam', label: 'Exam Scores' },
+  { key: 'discipline', label: 'Discipline' },
+  { key: 'detention', label: 'Detention' },
+  { key: 'club', label: 'Club' },
+  { key: 'guidance', label: 'Guidance' },
 ]
 
 const typeIcon: Record<ActivityType, LucideIcon> = {
@@ -41,11 +45,15 @@ const typeIcon: Record<ActivityType, LucideIcon> = {
   reading: BookOpenCheck,
   homework: ClipboardList,
   observation: Eye,
-  nap: Moon,
-  food: UtensilsCrossed,
   exam: ClipboardList,
   merit: Award,
   alert: AlertTriangle,
+  payment: Wallet,
+  fee_reminder: Bell,
+  discipline: ShieldAlert,
+  detention: CalendarClock,
+  club: Users,
+  guidance: Compass,
 }
 
 export default function ParentHomePage() {

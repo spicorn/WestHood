@@ -22,11 +22,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/stores/app-store'
 import { studentFullName } from '@/data/mock-data'
-import type { ClassRoom } from '@/data/types'
+import type { ALevelStream, ClassRoom } from '@/data/types'
+import { SubjectCombinationAdvisor } from '@/components/shared/subject-combination-advisor'
+import { STREAM_LABELS, adviseALevelStreams } from '@/lib/alevel-advisor'
 
 const LEVELS: { value: ClassRoom['level']; label: string }[] = [
-  { value: 'early', label: 'Early Years' },
-  { value: 'primary', label: 'Primary' },
   { value: 'olevel', label: 'O-Level' },
   { value: 'alevel', label: 'A-Level' },
 ]
@@ -46,7 +46,7 @@ interface ClassFormState {
 const emptyForm: ClassFormState = {
   name: '',
   grade: '',
-  level: 'primary',
+  level: 'olevel',
   color: COLOR_PRESETS[0],
   capacity: 30,
   classTeacherId: '',
@@ -56,6 +56,9 @@ export default function AdminClasses() {
   const classes = useAppStore((s) => s.classes)
   const students = useAppStore((s) => s.students)
   const staff = useAppStore((s) => s.staff)
+  const grades = useAppStore((s) => s.grades)
+  const subjects = useAppStore((s) => s.subjects)
+  const homework = useAppStore((s) => s.homework)
   const upsertClass = useAppStore((s) => s.upsertClass)
   const upsertStaff = useAppStore((s) => s.upsertStaff)
   const upsertStudent = useAppStore((s) => s.upsertStudent)
@@ -73,6 +76,8 @@ export default function AdminClasses() {
   const [promoteFromId, setPromoteFromId] = useState<string>('')
   const [promoteToId, setPromoteToId] = useState<string>('')
   const [promoteExclude, setPromoteExclude] = useState<string[]>([])
+  const [streamByStudent, setStreamByStudent] = useState<Record<string, ALevelStream>>({})
+  const [advisorStudentId, setAdvisorStudentId] = useState<string | null>(null)
 
   const activeStaff = useMemo(() => staff.filter((s) => s.status === 'active'), [staff])
   const countIn = (classId: string) => students.filter((s) => s.classId === classId && s.status === 'active').length
@@ -155,17 +160,34 @@ export default function AdminClasses() {
   }
 
   const openPromote = () => {
-    setPromoteFromId(classes[0]?.id ?? '')
-    setPromoteToId(classes[1]?.id ?? classes[0]?.id ?? '')
+    const fromId = classes.find((c) => c.id === 'c-f4')?.id ?? classes[0]?.id ?? ''
+    const toId = classes.find((c) => c.id === 'c-l6')?.id ?? classes[1]?.id ?? classes[0]?.id ?? ''
+    setPromoteFromId(fromId)
+    setPromoteToId(toId)
     setPromoteExclude([])
+    setStreamByStudent({})
+    setAdvisorStudentId(null)
     setPromoteOpen(true)
   }
 
   const promoteCandidates = students.filter((s) => s.classId === promoteFromId && s.status === 'active')
+  const isForm4ToL6 = promoteFromId === 'c-f4' && promoteToId === 'c-l6'
+  const advisorStudent = advisorStudentId ? students.find((s) => s.id === advisorStudentId) : undefined
+  const advisorAdvice = advisorStudent
+    ? adviseALevelStreams(advisorStudent, grades, subjects, homework)
+    : []
 
   const confirmPromote = () => {
     if (!promoteFromId || !promoteToId) return
-    promoteClass(promoteFromId, promoteToId, promoteExclude)
+    const streams = isForm4ToL6 ? streamByStudent : undefined
+    if (isForm4ToL6) {
+      const missing = promoteCandidates.filter((s) => !promoteExclude.includes(s.id) && !streams?.[s.id])
+      if (missing.length > 0) {
+        toast.error(`Select an A-Level stream for ${missing.length} student${missing.length === 1 ? '' : 's'}.`)
+        return
+      }
+    }
+    promoteClass(promoteFromId, promoteToId, promoteExclude, streams)
     const moved = promoteCandidates.length - promoteExclude.length
     toast.success(`Promoted ${moved} student${moved !== 1 ? 's' : ''} from ${classes.find((c) => c.id === promoteFromId)?.name} to ${classes.find((c) => c.id === promoteToId)?.name}.`)
     setPromoteOpen(false)
@@ -372,7 +394,7 @@ export default function AdminClasses() {
 
       {/* Year-End Promotion Dialog */}
       <Dialog open={promoteOpen} onOpenChange={setPromoteOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-gold-500" /> One-Click Year-End Promotion
@@ -388,6 +410,8 @@ export default function AdminClasses() {
                   onChange={(e) => {
                     setPromoteFromId(e.target.value)
                     setPromoteExclude([])
+                    setStreamByStudent({})
+                    setAdvisorStudentId(null)
                   }}
                 >
                   {classes.map((c) => (
@@ -399,7 +423,14 @@ export default function AdminClasses() {
               </div>
               <div className="space-y-1.5">
                 <Label>Promote to</Label>
-                <Select value={promoteToId} onChange={(e) => setPromoteToId(e.target.value)}>
+                <Select
+                  value={promoteToId}
+                  onChange={(e) => {
+                    setPromoteToId(e.target.value)
+                    setStreamByStudent({})
+                    setAdvisorStudentId(null)
+                  }}
+                >
                   {classes
                     .filter((c) => c.id !== promoteFromId)
                     .map((c) => (
@@ -418,13 +449,16 @@ export default function AdminClasses() {
                     <th className="w-10 px-3 py-2" />
                     <th className="px-3 py-2 font-semibold text-muted-foreground">Student</th>
                     <th className="px-3 py-2 font-semibold text-muted-foreground">Current avg.</th>
+                    {isForm4ToL6 && (
+                      <th className="px-3 py-2 font-semibold text-muted-foreground">A-Level stream</th>
+                    )}
                     <th className="px-3 py-2 font-semibold text-muted-foreground">Outcome</th>
                   </tr>
                 </thead>
                 <tbody>
                   {promoteCandidates.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground">
+                      <td colSpan={isForm4ToL6 ? 5 : 4} className="px-3 py-6 text-center text-muted-foreground">
                         No active students to promote in this class.
                       </td>
                     </tr>
@@ -443,6 +477,34 @@ export default function AdminClasses() {
                           </td>
                           <td className="px-3 py-2">{studentFullName(s)}</td>
                           <td className="px-3 py-2">{s.currentAvg}%</td>
+                          {isForm4ToL6 && (
+                            <td className="px-3 py-2">
+                              {!excluded && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Select
+                                    className="w-36"
+                                    value={streamByStudent[s.id] ?? ''}
+                                    onChange={(e) =>
+                                      setStreamByStudent((prev) => ({
+                                        ...prev,
+                                        [s.id]: e.target.value as ALevelStream,
+                                      }))
+                                    }
+                                  >
+                                    <option value="">Select stream</option>
+                                    {(Object.keys(STREAM_LABELS) as ALevelStream[]).map((stream) => (
+                                      <option key={stream} value={stream}>
+                                        {STREAM_LABELS[stream]}
+                                      </option>
+                                    ))}
+                                  </Select>
+                                  <Button size="sm" variant="ghost" onClick={() => setAdvisorStudentId(s.id)}>
+                                    Advisor
+                                  </Button>
+                                </div>
+                              )}
+                            </td>
+                          )}
                           <td className="px-3 py-2">
                             {excluded ? (
                               <Badge variant="secondary">Stays in {classes.find((c) => c.id === promoteFromId)?.name}</Badge>
@@ -457,6 +519,17 @@ export default function AdminClasses() {
                 </tbody>
               </table>
             </div>
+            {isForm4ToL6 && advisorStudent && (
+              <SubjectCombinationAdvisor
+                advice={advisorAdvice}
+                showPicker
+                selectedStream={streamByStudent[advisorStudent.id]}
+                onSelectStream={(stream) => {
+                  setStreamByStudent((prev) => ({ ...prev, [advisorStudent.id]: stream }))
+                  toast.success(`${STREAM_LABELS[stream]} selected for ${studentFullName(advisorStudent)}.`)
+                }}
+              />
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPromoteOpen(false)}>
