@@ -28,6 +28,11 @@ import AdminPredictions from '@/pages/admin/predictions'
 import AdminStaffAttendance from '@/pages/admin/staff-attendance'
 import AdminSettings from '@/pages/admin/settings'
 import AdminProfile from '@/pages/admin/profile'
+import AdminAbsenceRequests from '@/pages/admin/absence-requests'
+import AdminMessages from '@/pages/admin/messages'
+import AdminAuditLog from '@/pages/admin/audit-log'
+import AdminAdmissions from '@/pages/admin/admissions'
+import AdminAnalyticsExport from '@/pages/admin/analytics-export'
 
 import StaffHome from '@/pages/staff/home'
 import StaffMyClass from '@/pages/staff/my-class'
@@ -42,6 +47,8 @@ import StaffNotices from '@/pages/staff/notices'
 import StaffPredictions from '@/pages/staff/predictions'
 import StaffProfile from '@/pages/staff/profile'
 import StaffSettings from '@/pages/staff/settings'
+import StaffAbsenceRequests from '@/pages/staff/absence-requests'
+import StaffMessages from '@/pages/staff/messages'
 
 import StudentHome from '@/pages/student/home'
 import StudentTeachers from '@/pages/student/teachers'
@@ -57,6 +64,7 @@ import StudentReports from '@/pages/student/reports'
 import StudentProfile from '@/pages/student/profile'
 import StudentSettings from '@/pages/student/settings'
 import StudentHomework from '@/pages/student/homework'
+import StudentMessages from '@/pages/student/messages'
 
 import ParentHome from '@/pages/parent/home'
 import ParentTeachers from '@/pages/parent/teachers'
@@ -69,6 +77,9 @@ import ParentNotices from '@/pages/parent/notices'
 import ParentPickup from '@/pages/parent/pickup'
 import ParentProfile from '@/pages/parent/profile'
 import ParentSettings from '@/pages/parent/settings'
+import ParentAbsence from '@/pages/parent/absence'
+import ParentAssignments from '@/pages/parent/assignments'
+import ParentMessages from '@/pages/parent/messages'
 
 export default function App() {
   return (
@@ -96,6 +107,11 @@ export default function App() {
             <Route path="reports" element={<AdminReports />} />
             <Route path="predictions" element={<AdminPredictions />} />
             <Route path="staff-attendance" element={<AdminStaffAttendance />} />
+            <Route path="absence-requests" element={<AdminAbsenceRequests />} />
+            <Route path="messages" element={<AdminMessages />} />
+            <Route path="audit-log" element={<AdminAuditLog />} />
+            <Route path="admissions" element={<AdminAdmissions />} />
+            <Route path="analytics-export" element={<AdminAnalyticsExport />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="profile" element={<AdminProfile />} />
           </Route>
@@ -114,6 +130,8 @@ export default function App() {
             <Route path="homework" element={<StaffHomework />} />
             <Route path="predictions" element={<StaffPredictions />} />
             <Route path="notices" element={<StaffNotices />} />
+            <Route path="absence-requests" element={<StaffAbsenceRequests />} />
+            <Route path="messages" element={<StaffMessages />} />
             <Route path="profile" element={<StaffProfile />} />
             <Route path="settings" element={<StaffSettings />} />
           </Route>
@@ -133,6 +151,7 @@ export default function App() {
             <Route path="merit" element={<StudentMerit />} />
             <Route path="clubs" element={<StudentClubs />} />
             <Route path="homework" element={<StudentHomework />} />
+            <Route path="messages" element={<StudentMessages />} />
             <Route path="profile" element={<StudentProfile />} />
             <Route path="settings" element={<StudentSettings />} />
           </Route>
@@ -148,6 +167,9 @@ export default function App() {
             <Route path="timetable" element={<ParentTimetable />} />
             <Route path="payments" element={<ParentPayments />} />
             <Route path="notices" element={<ParentNotices />} />
+            <Route path="absence" element={<ParentAbsence />} />
+            <Route path="assignments" element={<ParentAssignments />} />
+            <Route path="messages" element={<ParentMessages />} />
             <Route path="pickup" element={<ParentPickup />} />
             <Route path="profile" element={<ParentProfile />} />
             <Route path="settings" element={<ParentSettings />} />
