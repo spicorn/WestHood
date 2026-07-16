@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import {
   addMonths,
   eachDayOfInterval,
@@ -29,9 +29,11 @@ const categoryColor: Record<string, string> = {
 export function NoticeCalendar({
   notices,
   onDayClick,
+  renderNoticeActions,
 }: {
   notices: Notice[]
   onDayClick?: (date: Date, items: Notice[]) => void
+  renderNoticeActions?: (notice: Notice) => ReactNode
 }) {
   const [month, setMonth] = useState(new Date(2026, 6, 1))
   const [selected, setSelected] = useState<Date | null>(new Date(2026, 6, 13))
@@ -112,6 +114,7 @@ export function NoticeCalendar({
                 </div>
                 <p className="font-medium text-sm">{n.title}</p>
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.body}</p>
+                {renderNoticeActions?.(n)}
               </li>
             ))}
           </ul>

@@ -28,6 +28,9 @@ export type ActivityType =
   | 'detention'
   | 'club'
   | 'guidance'
+  | 'absence'
+  | 'message'
+  | 'admission'
 
 export interface UserAccount {
   id: string
@@ -441,4 +444,86 @@ export interface NotificationItem {
   time: string
   read: boolean
   href?: string
+}
+
+export type AbsenceRequestStatus = 'pending' | 'approved' | 'declined'
+export type AdmissionStage = 'enquiry' | 'application' | 'offer' | 'accepted' | 'enrolled' | 'withdrawn'
+export type AuditAction =
+  | 'grade_upsert'
+  | 'report_status'
+  | 'report_publish'
+  | 'payment_recorded'
+  | 'invoice_updated'
+  | 'absence_decision'
+  | 'admission_stage'
+  | 'student_enrolled'
+
+export interface AbsenceRequest {
+  id: string
+  studentId: string
+  parentId: string
+  parentName: string
+  startDate: string
+  endDate: string
+  reason: string
+  status: AbsenceRequestStatus
+  submittedAt: string
+  reviewedBy?: string
+  reviewedAt?: string
+  reviewNote?: string
+}
+
+export interface MessageThread {
+  id: string
+  subject: string
+  /** Notice reply threads reference a notice id */
+  noticeId?: string
+  studentId?: string
+  participantIds: string[]
+  participantNames: Record<string, string>
+  createdAt: string
+  updatedAt: string
+  lastPreview: string
+}
+
+export interface ChatMessage {
+  id: string
+  threadId: string
+  senderId: string
+  senderName: string
+  senderRole: Role
+  body: string
+  sentAt: string
+  readBy: string[]
+}
+
+export interface AuditLogEntry {
+  id: string
+  action: AuditAction
+  actorId: string
+  actorName: string
+  actorRole: Role
+  summary: string
+  entityType: string
+  entityId: string
+  createdAt: string
+  meta?: Record<string, string>
+}
+
+export interface AdmissionEnquiry {
+  id: string
+  studentName: string
+  dob: string
+  gender: 'M' | 'F'
+  applyingForClassId: string
+  guardianName: string
+  guardianEmail: string
+  guardianPhone: string
+  relationship: string
+  stage: AdmissionStage
+  notes: string
+  source: string
+  createdAt: string
+  updatedAt: string
+  enrolledStudentId?: string
 }

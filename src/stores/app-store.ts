@@ -1,8 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
+  AbsenceRequest,
+  AbsenceRequestStatus,
   ActivityEntry,
+  AdmissionEnquiry,
+  AdmissionStage,
   ALevelStream,
+  AuditLogEntry,
+  ChatMessage,
   ClassRoom,
   Club,
   ClubMembership,
@@ -19,6 +25,7 @@ import type {
   LeadershipRole,
   LibraryBook,
   MeritRecord,
+  MessageThread,
   Notice,
   NotificationItem,
   ParentInvite,
@@ -26,6 +33,7 @@ import type {
   PaymentRecord,
   PickupPerson,
   ReportStatus,
+  Role,
   SchoolSettings,
   StaffMember,
   StaffPeriodAttendance,
@@ -36,7 +44,11 @@ import type {
   TimetableSlot,
 } from '@/data/types'
 import {
+  absenceRequests as seedAbsence,
   activities as seedActivities,
+  admissionEnquiries as seedAdmissions,
+  auditLog as seedAudit,
+  chatMessages as seedMessages,
   classes as seedClasses,
   clubMemberships as seedClubMemberships,
   clubs as seedClubs,
@@ -51,6 +63,7 @@ import {
   invoices as seedInvoices,
   libraryBooks as seedLibrary,
   meritRecords as seedMerit,
+  messageThreads as seedThreads,
   notices as seedNotices,
   notifications as seedNotifications,
   parentInvites as seedInvites,
@@ -66,6 +79,10 @@ import {
   timetable as seedTimetable,
 } from '@/data/mock-data'
 import { applyPaymentToInvoice, makeReceiptRef, syncInvoiceTotals } from '@/lib/fees'
+
+function nowIso() {
+  return new Date().toISOString()
+}
 
 interface AppState {
   students: Student[]
@@ -95,9 +112,15 @@ interface AppState {
   parentInvites: ParentInvite[]
   pickupPeople: PickupPerson[]
   notifications: NotificationItem[]
+  absenceRequests: AbsenceRequest[]
+  messageThreads: MessageThread[]
+  chatMessages: ChatMessage[]
+  auditLog: AuditLogEntry[]
+  admissionEnquiries: AdmissionEnquiry[]
   settings: SchoolSettings
   selectedChildId: string
   setSelectedChildId: (id: string) => void
+  logAudit: (entry: Omit<AuditLogEntry, 'id' | 'createdAt'> & { id?: string; createdAt?: string }) => void
   upsertStudent: (s: Student) => void
   archiveStudent: (id: string, archive: boolean) => void
   upsertStaff: (s: StaffMember) => void
@@ -105,7 +128,7 @@ interface AppState {
   upsertSubject: (s: Subject) => void
   upsertNotice: (n: Notice) => void
   deleteNotice: (id: string) => void
-  updateInvoice: (id: string, patch: Partial<Invoice>) => void
+  updateInvoice: (id: string, patch: Partial<Invoice>, actor?: { id: string; name: string; role: Role }) => void
   upsertFeeStructure: (f: FeeStructure) => void
   recordPayment: (input: {
     invoiceId: string
@@ -113,10 +136,15 @@ interface AppState {
     method: PaymentMethod
     instalmentId?: string
     recordedBy: string
+    recordedByName?: string
+    recordedByRole?: Role
     mobileNumber?: string
   }) => PaymentRecord | null
   sendFeeReminders: (invoiceIds: string[], by: string) => number
-  upsertGrade: (g: GradeEntry) => void
+  upsertGrade: (
+    g: GradeEntry,
+    actor?: { id: string; name: string; role: Role; summary?: string },
+  ) => void
   upsertTimetableSlot: (slot: TimetableSlot) => void
   updateStaffAttendance: (id: string, patch: Partial<StaffPeriodAttendance>) => void
   addStaffAttendance: (r: StaffPeriodAttendance) => void
@@ -134,7 +162,11 @@ interface AppState {
   promoteClass: (fromClassId: string, toClassId: string, excludeIds: string[], streamByStudent?: Record<string, ALevelStream>) => void
   requestLibraryBook: (bookId: string, studentId: string) => void
   upsertReport: (r: ElectronicReport) => void
-  setReportStatus: (id: string, status: ReportStatus) => void
+  setReportStatus: (
+    id: string,
+    status: ReportStatus,
+    actor?: { id: string; name: string; role: Role },
+  ) => void
   bulkFinalizeReports: (studentIds: string[], term: string) => number
   setPrincipalComment: (reportId: string, comment: string) => void
   addMeritWithEscalation: (m: MeritRecord) => { escalated: boolean }
@@ -147,6 +179,49 @@ interface AppState {
   joinClub: (clubId: string, studentId: string) => void
   leaveClub: (clubId: string, studentId: string) => void
   setLeadershipRole: (studentId: string, role: LeadershipRole) => void
+  submitAbsenceRequest: (r: Omit<AbsenceRequest, 'id' | 'status' | 'submittedAt'> & { id?: string }) => AbsenceRequest
+  reviewAbsenceRequest: (
+    id: string,
+    status: Exclude<AbsenceRequestStatus, 'pending'>,
+    reviewer: { id: string; name: string; role: Role },
+    note?: string,
+  ) => void
+  startNoticeReply: (input: {
+    noticeId: string
+    subject: string
+    body: string
+    senderId: string
+    senderName: string
+    senderRole: Role
+    studentId?: string
+  }) => string
+  sendMessage: (input: {
+    threadId: string
+    body: string
+    senderId: string
+    senderName: string
+    senderRole: Role
+  }) => void
+  startDirectThread: (input: {
+    subject: string
+    body: string
+    senderId: string
+    senderName: string
+    senderRole: Role
+    recipientId: string
+    recipientName: string
+    studentId?: string
+  }) => string
+  upsertAdmission: (e: AdmissionEnquiry) => void
+  advanceAdmission: (
+    id: string,
+    stage: AdmissionStage,
+    actor: { id: string; name: string; role: Role },
+  ) => void
+  enrolAdmission: (
+    id: string,
+    actor: { id: string; name: string; role: Role },
+  ) => Student | null
 }
 
 export const useAppStore = create<AppState>()(
@@ -179,9 +254,25 @@ export const useAppStore = create<AppState>()(
       parentInvites: seedInvites,
       pickupPeople: seedPickup,
       notifications: seedNotifications,
+      absenceRequests: seedAbsence,
+      messageThreads: seedThreads,
+      chatMessages: seedMessages,
+      auditLog: seedAudit,
+      admissionEnquiries: seedAdmissions,
       settings: seedSettings,
       selectedChildId: 'stu-kelvin',
       setSelectedChildId: (id) => set({ selectedChildId: id }),
+      logAudit: (entry) =>
+        set((st) => ({
+          auditLog: [
+            {
+              id: entry.id ?? `aud-${Date.now()}`,
+              createdAt: entry.createdAt ?? nowIso(),
+              ...entry,
+            },
+            ...st.auditLog,
+          ],
+        })),
       upsertStudent: (s) =>
         set((st) => ({
           students: st.students.some((x) => x.id === s.id)
@@ -217,19 +308,45 @@ export const useAppStore = create<AppState>()(
             : [n, ...st.notices],
         })),
       deleteNotice: (id) => set((st) => ({ notices: st.notices.filter((n) => n.id !== id) })),
-      updateInvoice: (id, patch) =>
+      updateInvoice: (id, patch, actor) => {
         set((st) => ({
           invoices: st.invoices.map((inv) =>
             inv.id === id ? syncInvoiceTotals({ ...inv, ...patch }) : inv,
           ),
-        })),
+          auditLog: actor
+            ? [
+                {
+                  id: `aud-${Date.now()}`,
+                  action: 'invoice_updated' as const,
+                  actorId: actor.id,
+                  actorName: actor.name,
+                  actorRole: actor.role,
+                  summary: `Updated invoice ${id}`,
+                  entityType: 'invoice',
+                  entityId: id,
+                  createdAt: nowIso(),
+                },
+                ...st.auditLog,
+              ]
+            : st.auditLog,
+        }))
+      },
       upsertFeeStructure: (f) =>
         set((st) => ({
           feeStructures: st.feeStructures.some((x) => x.id === f.id)
             ? st.feeStructures.map((x) => (x.id === f.id ? f : x))
             : [...st.feeStructures, f],
         })),
-      recordPayment: ({ invoiceId, amount, method, instalmentId, recordedBy, mobileNumber }) => {
+      recordPayment: ({
+        invoiceId,
+        amount,
+        method,
+        instalmentId,
+        recordedBy,
+        recordedByName,
+        recordedByRole,
+        mobileNumber,
+      }) => {
         const invoice = get().invoices.find((i) => i.id === invoiceId)
         if (!invoice || amount <= 0) return null
         const updated = applyPaymentToInvoice(invoice, amount, instalmentId)
@@ -245,6 +362,8 @@ export const useAppStore = create<AppState>()(
           mobileNumber,
         }
         const student = get().students.find((s) => s.id === invoice.studentId)
+        const actorName = recordedByName ?? recordedBy
+        const actorRole = recordedByRole ?? 'admin'
         set((st) => ({
           invoices: st.invoices.map((i) => (i.id === invoiceId ? updated : i)),
           paymentRecords: [record, ...st.paymentRecords],
@@ -260,6 +379,20 @@ export const useAppStore = create<AppState>()(
               time: new Date().toTimeString().slice(0, 5),
             },
             ...st.activities,
+          ],
+          auditLog: [
+            {
+              id: `aud-pay-${Date.now()}`,
+              action: 'payment_recorded' as const,
+              actorId: recordedBy,
+              actorName,
+              actorRole,
+              summary: `Recorded ${method} payment of $${amount.toFixed(2)} — ${student ? `${student.firstName} ${student.lastName}` : invoiceId}`,
+              entityType: 'payment',
+              entityId: record.id,
+              createdAt: nowIso(),
+            },
+            ...st.auditLog,
           ],
         }))
         return record
@@ -281,11 +414,28 @@ export const useAppStore = create<AppState>()(
         set((st) => ({ activities: [...activities, ...st.activities] }))
         return activities.length
       },
-      upsertGrade: (g) =>
+      upsertGrade: (g, actor) =>
         set((st) => ({
           grades: st.grades.some((x) => x.id === g.id)
             ? st.grades.map((x) => (x.id === g.id ? g : x))
             : [...st.grades, g],
+          auditLog: actor
+            ? [
+                {
+                  id: `aud-gr-${Date.now()}`,
+                  action: 'grade_upsert' as const,
+                  actorId: actor.id,
+                  actorName: actor.name,
+                  actorRole: actor.role,
+                  summary: actor.summary ?? `Updated grade mark to ${g.mark}%`,
+                  entityType: 'grade',
+                  entityId: g.id,
+                  createdAt: nowIso(),
+                  meta: { mark: String(g.mark), studentId: g.studentId, subjectId: g.subjectId },
+                },
+                ...st.auditLog,
+              ]
+            : st.auditLog,
         })),
       upsertTimetableSlot: (slot) =>
         set((st) => ({
@@ -589,7 +739,8 @@ export const useAppStore = create<AppState>()(
             ? st.electronicReports.map((x) => (x.id === r.id ? r : x))
             : [r, ...st.electronicReports],
         })),
-      setReportStatus: (id, status) =>
+      setReportStatus: (id, status, actor) => {
+        const report = get().electronicReports.find((r) => r.id === id)
         set((st) => ({
           electronicReports: st.electronicReports.map((r) => {
             if (r.id !== id) return r
@@ -603,7 +754,24 @@ export const useAppStore = create<AppState>()(
               publishedAt: status === 'published' ? new Date().toISOString() : r.publishedAt,
             }
           }),
-        })),
+          auditLog: actor
+            ? [
+                {
+                  id: `aud-rpt-${Date.now()}`,
+                  action: status === 'published' ? ('report_publish' as const) : ('report_status' as const),
+                  actorId: actor.id,
+                  actorName: actor.name,
+                  actorRole: actor.role,
+                  summary: `${status === 'published' ? 'Published' : `Set status to ${status}`} report ${report?.term ?? id}`,
+                  entityType: 'report',
+                  entityId: id,
+                  createdAt: nowIso(),
+                },
+                ...st.auditLog,
+              ]
+            : st.auditLog,
+        }))
+      },
       bulkFinalizeReports: (studentIds, term) => {
         const now = new Date().toISOString()
         let count = 0
@@ -622,9 +790,317 @@ export const useAppStore = create<AppState>()(
             r.id === reportId ? { ...r, principalComment: comment } : r,
           ),
         })),
+      submitAbsenceRequest: (r) => {
+        const req: AbsenceRequest = {
+          id: r.id ?? `abs-${Date.now()}`,
+          studentId: r.studentId,
+          parentId: r.parentId,
+          parentName: r.parentName,
+          startDate: r.startDate,
+          endDate: r.endDate,
+          reason: r.reason,
+          status: 'pending',
+          submittedAt: nowIso(),
+        }
+        set((st) => ({
+          absenceRequests: [req, ...st.absenceRequests],
+          activities: [
+            {
+              id: `act-abs-${Date.now()}`,
+              studentId: r.studentId,
+              type: 'absence',
+              title: 'Absence request submitted',
+              description: `${r.startDate} → ${r.endDate}: ${r.reason}`,
+              status: 'Pending',
+              date: nowIso().slice(0, 10),
+              time: nowIso().slice(11, 16),
+              flagged: true,
+            },
+            ...st.activities,
+          ],
+          notifications: [
+            {
+              id: `nt-abs-${Date.now()}`,
+              role: 'admin',
+              title: 'Absence request pending',
+              body: `${r.parentName} submitted an absence note.`,
+              time: 'Just now',
+              read: false,
+              href: '/admin/absence-requests',
+            },
+            {
+              id: `nt-abs-s-${Date.now()}`,
+              role: 'staff',
+              title: 'Absence request pending',
+              body: `${r.parentName} submitted an absence note.`,
+              time: 'Just now',
+              read: false,
+              href: '/staff/absence-requests',
+            },
+            ...st.notifications,
+          ],
+        }))
+        return req
+      },
+      reviewAbsenceRequest: (id, status, reviewer, note) => {
+        const req = get().absenceRequests.find((a) => a.id === id)
+        if (!req) return
+        set((st) => ({
+          absenceRequests: st.absenceRequests.map((a) =>
+            a.id === id
+              ? {
+                  ...a,
+                  status,
+                  reviewedBy: reviewer.name,
+                  reviewedAt: nowIso(),
+                  reviewNote: note,
+                }
+              : a,
+          ),
+          activities: [
+            {
+              id: `act-abs-rev-${Date.now()}`,
+              studentId: req.studentId,
+              type: 'absence',
+              title: `Absence request ${status}`,
+              description: note || `${req.startDate} → ${req.endDate}`,
+              status: status === 'approved' ? 'Approved' : 'Declined',
+              date: nowIso().slice(0, 10),
+              time: nowIso().slice(11, 16),
+              flagged: status === 'declined',
+            },
+            ...st.activities,
+          ],
+          auditLog: [
+            {
+              id: `aud-abs-${Date.now()}`,
+              action: 'absence_decision' as const,
+              actorId: reviewer.id,
+              actorName: reviewer.name,
+              actorRole: reviewer.role,
+              summary: `${status === 'approved' ? 'Approved' : 'Declined'} absence request for ${req.startDate}–${req.endDate}`,
+              entityType: 'absence',
+              entityId: id,
+              createdAt: nowIso(),
+            },
+            ...st.auditLog,
+          ],
+          notifications: [
+            {
+              id: `nt-abs-p-${Date.now()}`,
+              role: 'parent',
+              title: `Absence request ${status}`,
+              body: `Your request (${req.startDate}–${req.endDate}) was ${status}.`,
+              time: 'Just now',
+              read: false,
+              href: '/parent/absence',
+            },
+            ...st.notifications,
+          ],
+        }))
+      },
+      startNoticeReply: ({ noticeId, subject, body, senderId, senderName, senderRole, studentId }) => {
+        const threadId = `mt-${Date.now()}`
+        const adminId = 'u-admin'
+        set((st) => ({
+          messageThreads: [
+            {
+              id: threadId,
+              subject,
+              noticeId,
+              studentId,
+              participantIds: [senderId, adminId],
+              participantNames: {
+                [senderId]: senderName,
+                [adminId]: 'School Office',
+              },
+              createdAt: nowIso(),
+              updatedAt: nowIso(),
+              lastPreview: body.slice(0, 80),
+            },
+            ...st.messageThreads,
+          ],
+          chatMessages: [
+            {
+              id: `msg-${Date.now()}`,
+              threadId,
+              senderId,
+              senderName,
+              senderRole,
+              body,
+              sentAt: nowIso(),
+              readBy: [senderId],
+            },
+            ...st.chatMessages,
+          ],
+          notifications: [
+            {
+              id: `nt-msg-${Date.now()}`,
+              role: 'admin',
+              title: 'Notice reply from parent',
+              body: `${senderName}: ${body.slice(0, 60)}…`,
+              time: 'Just now',
+              read: false,
+              href: '/admin/messages',
+            },
+            ...st.notifications,
+          ],
+        }))
+        return threadId
+      },
+      sendMessage: ({ threadId, body, senderId, senderName, senderRole }) => {
+        const thread = get().messageThreads.find((t) => t.id === threadId)
+        if (!thread) return
+        set((st) => ({
+          chatMessages: [
+            {
+              id: `msg-${Date.now()}`,
+              threadId,
+              senderId,
+              senderName,
+              senderRole,
+              body,
+              sentAt: nowIso(),
+              readBy: [senderId],
+            },
+            ...st.chatMessages,
+          ],
+          messageThreads: st.messageThreads.map((t) =>
+            t.id === threadId ? { ...t, updatedAt: nowIso(), lastPreview: body.slice(0, 80) } : t,
+          ),
+          notifications: [
+            ...thread.participantIds
+              .filter((pid) => pid !== senderId)
+              .map((pid) => {
+                const role: Role =
+                  pid === 'u-admin' ? 'admin' : pid === 'u-staff' ? 'staff' : pid === 'u-parent' ? 'parent' : 'student'
+                return {
+                  id: `nt-msg-${pid}-${Date.now()}`,
+                  role,
+                  title: `Message: ${thread.subject}`,
+                  body: `${senderName}: ${body.slice(0, 60)}`,
+                  time: 'Just now',
+                  read: false,
+                  href: `/${role}/messages`,
+                }
+              }),
+            ...st.notifications,
+          ],
+        }))
+      },
+      startDirectThread: ({
+        subject,
+        body,
+        senderId,
+        senderName,
+        senderRole,
+        recipientId,
+        recipientName,
+        studentId,
+      }) => {
+        const threadId = `mt-${Date.now()}`
+        set((st) => ({
+          messageThreads: [
+            {
+              id: threadId,
+              subject,
+              studentId,
+              participantIds: [senderId, recipientId],
+              participantNames: { [senderId]: senderName, [recipientId]: recipientName },
+              createdAt: nowIso(),
+              updatedAt: nowIso(),
+              lastPreview: body.slice(0, 80),
+            },
+            ...st.messageThreads,
+          ],
+          chatMessages: [
+            {
+              id: `msg-${Date.now()}`,
+              threadId,
+              senderId,
+              senderName,
+              senderRole,
+              body,
+              sentAt: nowIso(),
+              readBy: [senderId],
+            },
+            ...st.chatMessages,
+          ],
+        }))
+        return threadId
+      },
+      upsertAdmission: (e) =>
+        set((st) => ({
+          admissionEnquiries: st.admissionEnquiries.some((x) => x.id === e.id)
+            ? st.admissionEnquiries.map((x) => (x.id === e.id ? e : x))
+            : [e, ...st.admissionEnquiries],
+        })),
+      advanceAdmission: (id, stage, actor) => {
+        set((st) => ({
+          admissionEnquiries: st.admissionEnquiries.map((e) =>
+            e.id === id ? { ...e, stage, updatedAt: nowIso() } : e,
+          ),
+          auditLog: [
+            {
+              id: `aud-adm-${Date.now()}`,
+              action: 'admission_stage' as const,
+              actorId: actor.id,
+              actorName: actor.name,
+              actorRole: actor.role,
+              summary: `Moved admission ${id} to ${stage}`,
+              entityType: 'admission',
+              entityId: id,
+              createdAt: nowIso(),
+            },
+            ...st.auditLog,
+          ],
+        }))
+      },
+      enrolAdmission: (id, actor) => {
+        const enquiry = get().admissionEnquiries.find((e) => e.id === id)
+        if (!enquiry) return null
+        const student: Student = {
+          id: `stu-adm-${Date.now()}`,
+          firstName: enquiry.studentName.split(' ')[0] ?? enquiry.studentName,
+          lastName: enquiry.studentName.split(' ').slice(1).join(' ') || 'New',
+          admissionNo: `WW${2026}${String(Math.floor(Math.random() * 900) + 100)}`,
+          dob: enquiry.dob,
+          classId: enquiry.applyingForClassId,
+          status: 'active',
+          parentIds: [],
+          gender: enquiry.gender,
+          attendancePct: 100,
+          previousAvg: 0,
+          currentAvg: 0,
+          leadershipRole: 'none',
+        }
+        set((st) => ({
+          students: [...st.students, student],
+          admissionEnquiries: st.admissionEnquiries.map((e) =>
+            e.id === id
+              ? { ...e, stage: 'enrolled' as const, enrolledStudentId: student.id, updatedAt: nowIso() }
+              : e,
+          ),
+          auditLog: [
+            {
+              id: `aud-enr-${Date.now()}`,
+              action: 'student_enrolled' as const,
+              actorId: actor.id,
+              actorName: actor.name,
+              actorRole: actor.role,
+              summary: `Enrolled ${enquiry.studentName} into ${enquiry.applyingForClassId}`,
+              entityType: 'student',
+              entityId: student.id,
+              createdAt: nowIso(),
+            },
+            ...st.auditLog,
+          ],
+        }))
+        return student
+      },
     }),
     {
-      name: 'westwood-app-data-v4',
+      name: 'westwood-app-data-v5',
       partialize: (s) => ({
         students: s.students,
         staff: s.staff,
@@ -653,6 +1129,11 @@ export const useAppStore = create<AppState>()(
         examRegistrations: s.examRegistrations,
         clubs: s.clubs,
         clubMemberships: s.clubMemberships,
+        absenceRequests: s.absenceRequests,
+        messageThreads: s.messageThreads,
+        chatMessages: s.chatMessages,
+        auditLog: s.auditLog,
+        admissionEnquiries: s.admissionEnquiries,
       }),
     },
   ),

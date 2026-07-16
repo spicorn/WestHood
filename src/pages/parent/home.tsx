@@ -5,11 +5,14 @@ import {
   Bell,
   BookOpenCheck,
   CalendarClock,
+  CalendarOff,
   ClipboardCheck,
   ClipboardList,
   Compass,
   Eye,
+  GraduationCap,
   type LucideIcon,
+  MessageSquare,
   ShieldAlert,
   Users,
   Wallet,
@@ -54,6 +57,9 @@ const typeIcon: Record<ActivityType, LucideIcon> = {
   detention: CalendarClock,
   club: Users,
   guidance: Compass,
+  absence: CalendarOff,
+  message: MessageSquare,
+  admission: GraduationCap,
 }
 
 export default function ParentHomePage() {

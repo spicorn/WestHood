@@ -1,16 +1,19 @@
 import {
   BookOpen,
   CalendarDays,
+  CalendarOff,
   ClipboardCheck,
   ClipboardList,
   CreditCard,
   Crown,
+  FileBarChart,
   GraduationCap,
   Home,
   Library,
   Settings,
   ShieldAlert,
   Users,
+  UserPlus,
   UserSquare2,
   Award,
   FileText,
@@ -22,12 +25,15 @@ import {
   ScrollText,
   Compass,
   FileBadge,
+  MessageSquare,
+  Scroll,
 } from 'lucide-react'
 import { AppShell, type NavItem } from '@/components/layout/app-shell'
 
 const adminNav: NavItem[] = [
   { to: '/admin', label: 'Dashboard', icon: Home },
   { to: '/admin/students', label: 'Students', icon: GraduationCap },
+  { to: '/admin/admissions', label: 'Admissions', icon: UserPlus },
   { to: '/admin/classes', label: 'Classes', icon: Users },
   { to: '/admin/staff', label: 'Staff', icon: UserSquare2 },
   { to: '/admin/subjects', label: 'Subjects', icon: BookOpen },
@@ -40,8 +46,12 @@ const adminNav: NavItem[] = [
   { to: '/admin/predictions', label: 'Predictions', icon: LineChart },
   { to: '/admin/timetable', label: 'Timetable', icon: Clock },
   { to: '/admin/notices', label: 'Notices / Calendar', icon: CalendarDays },
+  { to: '/admin/absence-requests', label: 'Absence Requests', icon: CalendarOff },
+  { to: '/admin/messages', label: 'Messages', icon: MessageSquare },
   { to: '/admin/financials', label: 'Financials', icon: Wallet },
+  { to: '/admin/analytics-export', label: 'Analytics Export', icon: FileBarChart },
   { to: '/admin/staff-attendance', label: 'Staff Attendance', icon: ClipboardCheck },
+  { to: '/admin/audit-log', label: 'Audit Log', icon: Scroll },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -57,6 +67,8 @@ const staffNav: NavItem[] = [
   { to: '/staff/materials', label: 'Study Materials', icon: FileText },
   { to: '/staff/homework', label: 'Homework', icon: BookOpen },
   { to: '/staff/notices', label: 'Notices', icon: Bell },
+  { to: '/staff/absence-requests', label: 'Absence Requests', icon: CalendarOff },
+  { to: '/staff/messages', label: 'Messages', icon: MessageSquare },
   { to: '/staff/profile', label: 'My Profile', icon: User },
 ]
 
@@ -68,9 +80,11 @@ const studentNav: NavItem[] = [
   { to: '/student/reports', label: 'Reports', icon: ScrollText },
   { to: '/student/clubs', label: 'Clubs', icon: Users },
   { to: '/student/timetable', label: 'Timetable', icon: Clock },
+  { to: '/student/homework', label: 'Assignments', icon: BookOpen },
   { to: '/student/payments', label: 'Payments', icon: CreditCard },
   { to: '/student/library', label: 'Library', icon: Library },
   { to: '/student/notices', label: 'Notices', icon: CalendarDays },
+  { to: '/student/messages', label: 'Messages', icon: MessageSquare },
   { to: '/student/merit', label: 'Merit Record', icon: Award },
   { to: '/student/profile', label: 'My Profile', icon: User },
 ]
@@ -82,8 +96,11 @@ const parentNav: NavItem[] = [
   { to: '/parent/reports', label: 'Reports', icon: ScrollText },
   { to: '/parent/guidance', label: 'Care & Guidance', icon: Compass },
   { to: '/parent/timetable', label: 'Timetable', icon: Clock },
+  { to: '/parent/assignments', label: 'Assignments', icon: BookOpen },
   { to: '/parent/payments', label: 'Payments', icon: CreditCard },
   { to: '/parent/notices', label: 'Notices', icon: CalendarDays },
+  { to: '/parent/absence', label: 'Absence Requests', icon: CalendarOff },
+  { to: '/parent/messages', label: 'Messages', icon: MessageSquare },
   { to: '/parent/pickup', label: 'Pickup Auth', icon: Users },
   { to: '/parent/profile', label: 'My Profile', icon: User },
 ]

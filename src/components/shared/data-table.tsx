@@ -18,6 +18,7 @@ export function DataTable<T extends { id: string }>({
   searchPlaceholder = 'Search…',
   pageSize = 10,
   onRowClick,
+  rowClassName,
   emptyMessage = 'No records found.',
 }: {
   data: T[]
@@ -26,6 +27,7 @@ export function DataTable<T extends { id: string }>({
   searchPlaceholder?: string
   pageSize?: number
   onRowClick?: (row: T) => void
+  rowClassName?: (row: T) => string | undefined
   emptyMessage?: string
 }) {
   const [q, setQ] = useState('')
@@ -112,7 +114,11 @@ export function DataTable<T extends { id: string }>({
               slice.map((row) => (
                 <tr
                   key={row.id}
-                  className={cn('border-b last:border-0 hover:bg-muted/40', onRowClick && 'cursor-pointer')}
+                  className={cn(
+                    'border-b last:border-0 hover:bg-muted/40',
+                    onRowClick && 'cursor-pointer',
+                    rowClassName?.(row),
+                  )}
                   onClick={() => onRowClick?.(row)}
                 >
                   {columns.map((col) => (
