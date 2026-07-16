@@ -5,7 +5,7 @@ import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { SchoolCrest } from "@/components/shared/brand";
+import logo from "../assets/logo.jpeg";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import {
@@ -81,7 +81,11 @@ export function LoginPage() {
         >
           <div className="mb-8 text-center">
             <div className="mx-auto mb-4 flex justify-center">
-              <SchoolCrest size="lg" />
+              <img
+                src={logo}
+                alt="Westwood College Logo"
+                className="h-16 w-16 rounded-full"
+              />
             </div>
             <h1 className="font-display text-4xl font-semibold text-white">
               Westwood College

@@ -1,25 +1,25 @@
-import type { ClassRoom, Exam, Student } from '@/data/types'
-import { getGradeLetter, studentFullName } from '@/data/mock-data'
-import { formatDate } from '@/lib/utils'
-import { SchoolCrest } from '@/components/shared/brand'
-import { cn } from '@/lib/utils'
+import type { ClassRoom, Exam, Student } from "@/data/types";
+import { getGradeLetter, studentFullName } from "@/data/mock-data";
+import { formatDate } from "@/lib/utils";
+import logo from "../../assets/logo.jpeg";
+import { cn } from "@/lib/utils";
 
 export interface MarksheetRow {
-  subjectName: string
-  subjectCode: string
-  teacherName?: string
-  mark: number
-  comment?: string
+  subjectName: string;
+  subjectCode: string;
+  teacherName?: string;
+  mark: number;
+  comment?: string;
 }
 
 export interface PrintMarksheetProps {
-  student: Student
-  classRoom?: ClassRoom
-  exam: Exam
-  rows: MarksheetRow[]
-  schoolName?: string
-  schoolTagline?: string
-  className?: string
+  student: Student;
+  classRoom?: ClassRoom;
+  exam: Exam;
+  rows: MarksheetRow[];
+  schoolName?: string;
+  schoolTagline?: string;
+  className?: string;
 }
 
 /**
@@ -32,25 +32,43 @@ export function PrintMarksheet({
   classRoom,
   exam,
   rows,
-  schoolName = 'Westwood College',
-  schoolTagline = 'Visus Manifestus.',
+  schoolName = "Westwood College",
+  schoolTagline = "Visus Manifestus.",
   className,
 }: PrintMarksheetProps) {
-  const average = rows.length > 0 ? rows.reduce((sum, r) => sum + r.mark, 0) / rows.length : 0
-  const overallGrade = getGradeLetter(Math.round(average), exam)
+  const average =
+    rows.length > 0
+      ? rows.reduce((sum, r) => sum + r.mark, 0) / rows.length
+      : 0;
+  const overallGrade = getGradeLetter(Math.round(average), exam);
 
   return (
-    <div className={cn('print-area rounded-lg border bg-card p-6 shadow-soft sm:p-8', className)}>
+    <div
+      className={cn(
+        "print-area rounded-lg border bg-card p-6 shadow-soft sm:p-8",
+        className,
+      )}
+    >
       <div className="flex items-center justify-between gap-4 border-b pb-4">
         <div className="flex items-center gap-3">
-          <SchoolCrest size="md" />
+          <img
+            src={logo}
+            alt="Westwood College Logo"
+            className="h-12 w-12 rounded-full"
+          />
           <div>
-            <p className="font-display text-xl font-semibold text-navy-900">{schoolName}</p>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-gold-700">{schoolTagline}</p>
+            <p className="font-display text-xl font-semibold text-navy-900">
+              {schoolName}
+            </p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-gold-700">
+              {schoolTagline}
+            </p>
           </div>
         </div>
         <div className="text-right">
-          <p className="font-display text-lg font-semibold text-navy-800">Academic Report</p>
+          <p className="font-display text-lg font-semibold text-navy-800">
+            Academic Report
+          </p>
           <p className="text-xs text-muted-foreground">{exam.name}</p>
         </div>
       </div>
@@ -77,11 +95,21 @@ export function PrintMarksheet({
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-y bg-muted/50 text-left">
-            <th className="px-3 py-2 font-semibold text-muted-foreground">Subject</th>
-            <th className="px-3 py-2 font-semibold text-muted-foreground">Teacher</th>
-            <th className="px-3 py-2 text-right font-semibold text-muted-foreground">Mark</th>
-            <th className="px-3 py-2 text-center font-semibold text-muted-foreground">Grade</th>
-            <th className="px-3 py-2 font-semibold text-muted-foreground">Comment</th>
+            <th className="px-3 py-2 font-semibold text-muted-foreground">
+              Subject
+            </th>
+            <th className="px-3 py-2 font-semibold text-muted-foreground">
+              Teacher
+            </th>
+            <th className="px-3 py-2 text-right font-semibold text-muted-foreground">
+              Mark
+            </th>
+            <th className="px-3 py-2 text-center font-semibold text-muted-foreground">
+              Grade
+            </th>
+            <th className="px-3 py-2 font-semibold text-muted-foreground">
+              Comment
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -89,17 +117,30 @@ export function PrintMarksheet({
             <tr key={row.subjectCode} className="border-b last:border-0">
               <td className="px-3 py-2">
                 <span className="font-medium">{row.subjectName}</span>
-                <span className="ml-1 text-xs text-muted-foreground">({row.subjectCode})</span>
+                <span className="ml-1 text-xs text-muted-foreground">
+                  ({row.subjectCode})
+                </span>
               </td>
-              <td className="px-3 py-2 text-muted-foreground">{row.teacherName ?? '—'}</td>
-              <td className="px-3 py-2 text-right font-semibold">{row.mark}%</td>
-              <td className="px-3 py-2 text-center font-semibold">{getGradeLetter(row.mark, exam)}</td>
-              <td className="px-3 py-2 text-muted-foreground">{row.comment ?? '—'}</td>
+              <td className="px-3 py-2 text-muted-foreground">
+                {row.teacherName ?? "—"}
+              </td>
+              <td className="px-3 py-2 text-right font-semibold">
+                {row.mark}%
+              </td>
+              <td className="px-3 py-2 text-center font-semibold">
+                {getGradeLetter(row.mark, exam)}
+              </td>
+              <td className="px-3 py-2 text-muted-foreground">
+                {row.comment ?? "—"}
+              </td>
             </tr>
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+              <td
+                colSpan={5}
+                className="px-3 py-6 text-center text-muted-foreground"
+              >
                 No grades recorded for this exam.
               </td>
             </tr>
@@ -110,11 +151,15 @@ export function PrintMarksheet({
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md bg-navy-50 px-4 py-3">
         <div>
           <p className="text-xs text-muted-foreground">Average</p>
-          <p className="font-display text-lg font-semibold text-navy-900">{average.toFixed(1)}%</p>
+          <p className="font-display text-lg font-semibold text-navy-900">
+            {average.toFixed(1)}%
+          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Overall Grade</p>
-          <p className="font-display text-lg font-semibold text-navy-900">{overallGrade}</p>
+          <p className="font-display text-lg font-semibold text-navy-900">
+            {overallGrade}
+          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Exam Period</p>
@@ -125,9 +170,13 @@ export function PrintMarksheet({
       </div>
 
       <div className="mt-8 grid grid-cols-2 gap-8 text-sm">
-        <div className="border-t pt-2 text-muted-foreground">Class Teacher's Signature</div>
-        <div className="border-t pt-2 text-muted-foreground">Parent/Guardian's Signature</div>
+        <div className="border-t pt-2 text-muted-foreground">
+          Class Teacher's Signature
+        </div>
+        <div className="border-t pt-2 text-muted-foreground">
+          Parent/Guardian's Signature
+        </div>
       </div>
     </div>
-  )
+  );
 }
