@@ -23,6 +23,54 @@ const gradeColors: Record<string, string> = {
 
 const PASS_MARK = 40
 
+function formatSignatureSample(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) {
+    return `${parts[0].charAt(0)}. ${parts[parts.length - 1]}`
+  }
+  return name
+}
+
+function SignatureField({
+  label,
+  name,
+  date,
+}: {
+  label: string
+  name: string
+  date: string
+}) {
+  const sample = formatSignatureSample(name)
+  return (
+    <div className="rounded-lg border bg-card p-4 shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </p>
+      <div className="mt-3 min-h-[56px] rounded-md border border-dashed border-navy-200/80 bg-navy-50/40 px-3 py-2">
+        <p
+          className="font-['Segoe_Script','Brush_Script_MT','Lucida_Handwriting',cursive] text-[1.65rem] leading-none text-navy-800"
+          aria-hidden
+        >
+          {sample}
+        </p>
+      </div>
+      <div className="mt-3 space-y-1 border-t pt-3">
+        <p className="text-sm font-medium text-navy-900">{name}</p>
+        <p className="text-xs text-muted-foreground">Date: {date}</p>
+      </div>
+    </div>
+  )
+}
+
+const GRADE_LEGEND = [
+  { grade: 'A', range: '80–100', color: gradeColors.A },
+  { grade: 'B', range: '70–79', color: gradeColors.B },
+  { grade: 'C', range: '60–69', color: gradeColors.C },
+  { grade: 'D', range: '50–59', color: gradeColors.D },
+  { grade: 'E', range: '40–49', color: gradeColors.E },
+  { grade: 'U', range: 'below 40', color: gradeColors.U },
+] as const
+
 type MarkGrid = Record<string, Record<string, string>>
 
 function buildGrid(
@@ -196,6 +244,11 @@ export function ExamMarkSchedule() {
   const classAverage = studentAverages.length
     ? Math.round((studentAverages.reduce((a, b) => a + b, 0) / studentAverages.length) * 10) / 10
     : null
+
+  const classTeacherName =
+    staff.find((m) => m.id === classRoom?.classTeacherId)?.name ?? 'Class Teacher'
+  const signOffDate = new Date().toLocaleDateString('en-GB')
+  const principalName = 'Dr. T. Moyo'
 
   const filledCells = roster.reduce((acc, s) => {
     for (const sub of classSubjects) {
@@ -507,64 +560,87 @@ export function ExamMarkSchedule() {
                   })
                 )}
               </tbody>
-              {roster.length > 0 && (
-                <tfoot>
-                  <tr className="border-t-2 bg-muted/40 font-semibold">
-                    <td
-                      colSpan={3 + classSubjects.length * 2}
-                      className="sticky left-0 z-10 border-r bg-muted/40 px-3 py-2 text-right text-muted-foreground"
-                    >
-                      Summary
-                    </td>
-                    <td colSpan={3} className="px-3 py-2">
-                      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
-                        <span>
-                          <span className="text-muted-foreground">No. in class: </span>
-                          {roster.length}
-                        </span>
-                        <span>
-                          <span className="text-muted-foreground">Pass rate: </span>
-                          {passRate !== null ? `${passRate}%` : '—'}
-                        </span>
-                        <span>
-                          <span className="text-muted-foreground">Class average: </span>
-                          {classAverage !== null ? `${classAverage}%` : '—'}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr className="border-t bg-muted/20 text-[11px] text-muted-foreground">
-                    <td colSpan={3 + classSubjects.length * 2 + 3} className="px-3 py-2">
-                      Grading: A 80–100 · B 70–79 · C 60–69 · D 50–59 · E 40–49 · U below 40.
-                      Totals and averages update automatically as marks are entered.
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
             </table>
           </div>
+
+          {roster.length > 0 && (
+            <div className="border-t bg-gradient-to-b from-muted/20 to-muted/40 px-4 py-5 sm:px-6">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-md">
+                  <p className="font-display text-base font-semibold text-navy-900">Class Summary</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Totals, averages, and pass rate update automatically as marks are entered.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {GRADE_LEGEND.map(({ grade, range, color }) => (
+                      <span
+                        key={grade}
+                        className="inline-flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-[11px] font-medium"
+                      >
+                        <span
+                          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                          style={{ backgroundColor: color }}
+                        >
+                          {grade}
+                        </span>
+                        {range}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border bg-card px-4 py-3 text-center shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      No. in class
+                    </p>
+                    <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-navy-900">
+                      {roster.length}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-card px-4 py-3 text-center shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Pass rate
+                    </p>
+                    <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-forest-700">
+                      {passRate !== null ? `${passRate}%` : '—'}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-muted-foreground">Students averaging ≥40%</p>
+                  </div>
+                  <div className="rounded-lg border bg-card px-4 py-3 text-center shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Class average
+                    </p>
+                    <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-[#a0331c]">
+                      {classAverage !== null ? `${classAverage}%` : '—'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <div className="mt-4 rounded-md border bg-card p-4 text-sm">
-        <p className="font-medium text-navy-800">Class teacher sign-off</p>
-        <div className="mt-3 grid gap-4 sm:grid-cols-3">
-          <div>
-            <p className="text-xs text-muted-foreground">Class teacher</p>
-            <p className="font-medium">
-              {staff.find((m) => m.id === classRoom?.classTeacherId)?.name ?? '—'}
+      {roster.length > 0 && (
+        <div className="mt-5">
+          <div className="mb-3">
+            <p className="font-display text-base font-semibold text-navy-900">Authorisation</p>
+            <p className="text-sm text-muted-foreground">
+              Sample signatures for submission — replace with official sign-off when printing.
             </p>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Compiled by</p>
-            <p className="font-medium">{teacher.name}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Date</p>
-            <p className="font-medium">{new Date().toLocaleDateString('en-GB')}</p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <SignatureField label="Class Teacher" name={classTeacherName} date={signOffDate} />
+            <SignatureField label="Compiled by" name={teacher.name} date={signOffDate} />
+            <SignatureField
+              label="Principal / Vice Principal"
+              name={principalName}
+              date={signOffDate}
+            />
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
