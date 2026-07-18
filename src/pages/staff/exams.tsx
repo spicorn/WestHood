@@ -8,7 +8,7 @@ import { useCurrentStaff } from '@/hooks/use-current-staff'
 import { PageHeader, EmptyState, StatCard } from '@/components/shared/empty-state'
 import { Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Select, Avatar } from '@/components/ui/tabs'
+import { Select, Tabs, TabsContent, TabsList, TabsTrigger, Avatar } from '@/components/ui/tabs'
 import { Input, Textarea } from '@/components/ui/input'
 import {
   Dialog,
@@ -18,6 +18,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { ExamMarkSchedule } from '@/components/staff/exam-mark-schedule'
 
 const gradeColors: Record<string, string> = {
   A: '#2d5a3f',
@@ -93,8 +94,11 @@ export default function StaffExamsPage() {
   if (mySubjects.length === 0) {
     return (
       <div>
-        <PageHeader title="Exam Records" description="Enter and edit marks for the subjects you teach." />
-        <EmptyState icon={BookMarked} title="No subjects assigned" description="You have no subjects assigned yet." />
+        <PageHeader
+          title="Exam Records"
+          description="Compile the class mark schedule with automatic totals and averages."
+        />
+        <ExamMarkSchedule />
       </div>
     )
   }
@@ -144,9 +148,107 @@ export default function StaffExamsPage() {
     <div>
       <PageHeader
         title="Exam Records"
-        description="Enter and edit marks for the subjects you teach, with class averages and grade distribution."
-        actions={<Button className="gap-2" onClick={handleSaveAll}><Save className="h-4 w-4" /> Save All Marks</Button>}
+        description="Enter marks by subject or compile the full class mark schedule with automatic totals and averages."
       />
+
+      <Tabs defaultValue="subject" className="mt-2">
+        <TabsList className="mb-6 h-auto flex-wrap gap-1">
+          <TabsTrigger value="subject">Subject Entry</TabsTrigger>
+          <TabsTrigger value="schedule">Mark Schedule</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="subject">
+          <SubjectMarkEntry
+            mySubjects={mySubjects}
+            examId={examId}
+            setExamId={setExamId}
+            subjectId={subjectId}
+            setSubjectId={setSubjectId}
+            classId={classId}
+            setClassId={setClassId}
+            myClassesForSubject={myClassesForSubject}
+            exam={exam}
+            roster={roster}
+            rows={rows}
+            updateRow={updateRow}
+            validMarks={validMarks}
+            average={average}
+            distribution={distribution}
+            handleSaveAll={handleSaveAll}
+            subject={subject}
+            classes={classes}
+            commentFor={commentFor}
+            setCommentFor={setCommentFor}
+            commentQuery={commentQuery}
+            setCommentQuery={setCommentQuery}
+            filteredPhrases={filteredPhrases}
+          />
+        </TabsContent>
+
+        <TabsContent value="schedule">
+          <ExamMarkSchedule />
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+function SubjectMarkEntry({
+  mySubjects,
+  examId,
+  setExamId,
+  subjectId,
+  setSubjectId,
+  classId,
+  setClassId,
+  myClassesForSubject,
+  exam,
+  roster,
+  rows,
+  updateRow,
+  validMarks,
+  average,
+  distribution,
+  handleSaveAll,
+  subject,
+  classes,
+  commentFor,
+  setCommentFor,
+  commentQuery,
+  setCommentQuery,
+  filteredPhrases,
+}: {
+  mySubjects: ReturnType<typeof useAppStore.getState>['subjects']
+  examId: string
+  setExamId: (v: string) => void
+  subjectId: string
+  setSubjectId: (v: string) => void
+  classId: string
+  setClassId: (v: string) => void
+  myClassesForSubject: ReturnType<typeof useAppStore.getState>['classes']
+  exam: (typeof exams)[number] | undefined
+  roster: ReturnType<typeof useAppStore.getState>['students']
+  rows: Record<string, MarkRow>
+  updateRow: (studentId: string, patch: Partial<MarkRow>) => void
+  validMarks: number[]
+  average: number | null
+  distribution: { grade: string; count: number }[]
+  handleSaveAll: () => void
+  subject: ReturnType<typeof useAppStore.getState>['subjects'][number] | undefined
+  classes: ReturnType<typeof useAppStore.getState>['classes']
+  commentFor: string | null
+  setCommentFor: (v: string | null) => void
+  commentQuery: string
+  setCommentQuery: (v: string) => void
+  filteredPhrases: typeof commentPhrases
+}) {
+  return (
+    <>
+      <div className="mb-4 flex justify-end">
+        <Button className="gap-2" onClick={handleSaveAll}>
+          <Save className="h-4 w-4" /> Save All Marks
+        </Button>
+      </div>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <div>
@@ -322,6 +424,6 @@ export default function StaffExamsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }
